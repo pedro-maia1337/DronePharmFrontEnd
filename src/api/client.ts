@@ -5,11 +5,21 @@ const AUTHORIZATION_HEADER = "Authorization";
 const CONTENT_TYPE_HEADER = "Content-Type";
 const BEARER_PREFIX = "Bearer";
 
+function normalizeBaseUrl(baseUrl?: string): string {
+  if (baseUrl === undefined) {
+    return "";
+  }
+
+  return baseUrl.trim().replace(/\/+$/, "");
+}
+
 function buildHeaders(init?: RequestInit): Headers {
   const headers = new Headers(init?.headers);
   const token = import.meta.env.VITE_API_TOKEN;
 
-  headers.set(AUTHORIZATION_HEADER, `${BEARER_PREFIX} ${token}`);
+  if (token !== undefined && token.trim() !== "") {
+    headers.set(AUTHORIZATION_HEADER, `${BEARER_PREFIX} ${token}`);
+  }
 
   return headers;
 }
@@ -47,7 +57,7 @@ export async function apiFetch<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const baseUrl = import.meta.env.VITE_API_URL;
+  const baseUrl = normalizeBaseUrl(import.meta.env.VITE_API_URL);
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: buildHeaders(init),

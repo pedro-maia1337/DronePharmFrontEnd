@@ -57,6 +57,18 @@ function getReconnectDelay(attempt: number): number {
   return BASE_RETRY_DELAY_MS * 2 ** attempt;
 }
 
+function buildWebSocketUrl(droneId: string): string {
+  const configuredBaseUrl = import.meta.env.VITE_WS_URL?.trim();
+
+  if (configuredBaseUrl) {
+    return `${configuredBaseUrl.replace(/\/+$/, "")}/ws/telemetria/${droneId}`;
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+
+  return `${protocol}//${window.location.host}/ws/telemetria/${droneId}`;
+}
+
 export function useOrderStream(droneId: string): OrderStreamState {
   const setFrame = useTelemetryStore((state) => state.setFrame);
   const appendHistory = useTelemetryStore((state) => state.appendHistory);
@@ -101,7 +113,7 @@ export function useOrderStream(droneId: string): OrderStreamState {
     clearReconnectTimer(reconnectTimerRef);
 
     try {
-      const wsUrl = `${import.meta.env.VITE_WS_URL}/ws/telemetria/${droneId}`;
+      const wsUrl = buildWebSocketUrl(droneId);
       const socket = new WebSocket(wsUrl);
 
       socketRef.current = socket;
