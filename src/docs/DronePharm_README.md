@@ -635,7 +635,7 @@ npm run coverage   # Vitest com relatório de cobertura
 Atue como Dev Frontend Sênior especializado em Contract-Driven Development.
 
 Projeto: DronePharm — sistema de monitoramento de entregas de medicamentos via drones.
-O openapi.json é a fonte da verdade. Toda tipagem e toda chamada de API derivam
+O openapi.json arquivo contido em src\docs\openapi.json é a fonte da verdade. Toda tipagem e toda chamada de API derivam
 exclusivamente dele. Não invente campos, não assuma payloads, não alucine rotas.
 
 ━━━ STACK ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

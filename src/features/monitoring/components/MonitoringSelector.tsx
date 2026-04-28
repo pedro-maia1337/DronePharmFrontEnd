@@ -1,121 +1,122 @@
-import { useEffect, useMemo, type ReactElement } from "react";
+import { useEffect, useMemo, type ChangeEvent, type ReactElement } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { listPedidos } from "@/api/pedidos";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { HTTPValidationError, PedidoResponse } from "@/types/api";
 
+import {
+  getMonitoringBadgeClassName,
+  isPedidoSelectable,
+} from "../monitoringUtils";
+
 const QUERY_KEY = ["monitoring-pedidos"];
 const QUERY_LIMIT = 100;
-const MONITORABLE_STATUSES = new Set(["calculado", "despachado"]);
 const PAGE_CLASS_NAME =
-  "flex min-h-[calc(100dvh-56px)] flex-col bg-background px-6 py-8";
-const CONTENT_CLASS_NAME = "mx-auto flex w-full max-w-6xl flex-col gap-6";
-const GRID_CLASS_NAME = "grid gap-4 md:grid-cols-2 xl:grid-cols-3";
-const STATUS_CLASS_NAME: Record<string, string> = {
-  calculado: "border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
-  despachado: "border-sky-500/30 bg-sky-500/10 text-sky-300",
-};
+  "min-h-[calc(100dvh-56px)] bg-[var(--surface-base)] px-6 py-8";
+const CONTENT_CLASS_NAME =
+  "mx-auto flex w-full max-w-[760px] flex-col gap-6 rounded-[var(--radius-lg)] border border-[var(--surface-border)] bg-[var(--surface-panel)] p-6";
+const TITLE_CLASS_NAME = "text-xl font-semibold text-[var(--text-primary)]";
+const DESCRIPTION_CLASS_NAME = "text-sm text-[var(--text-secondary)]";
+const SELECT_WRAPPER_CLASS_NAME = "relative";
+const SELECT_CLASS_NAME =
+  "h-[38px] w-full appearance-none rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-[var(--surface-input)] px-3 pr-10 text-sm text-[var(--text-primary)] outline-none transition-[border-color,box-shadow] duration-150 focus:border-[var(--accent)] focus:shadow-[var(--shadow-focus)]";
+const GRID_CLASS_NAME = "grid gap-3 md:grid-cols-2";
+const CARD_CLASS_NAME =
+  "rounded-[var(--radius-md)] border border-[var(--surface-border)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-card)]";
+const EMPTY_STATE_CLASS_NAME =
+  "rounded-[var(--radius-md)] border border-[var(--surface-border)] bg-[var(--surface-card)] p-4 text-sm text-[var(--text-secondary)]";
+const PLACEHOLDER_VALUE = "";
 
 function isValidationError(error: unknown): error is HTTPValidationError {
-  if (typeof error !== "object" || error === null) {
-    return false;
-  }
-
-  return "detail" in error;
+  return typeof error === "object" && error !== null && "detail" in error;
 }
 
 function getErrorMessage(error: unknown): string {
   if (isValidationError(error)) {
-    return error.detail?.[0]?.msg ?? "Falha ao carregar pedidos para monitoramento.";
+    return error.detail?.[0]?.msg ?? "Falha ao carregar pedidos.";
   }
 
   if (error instanceof Error) {
     return error.message;
   }
 
-  return "Falha ao carregar pedidos para monitoramento.";
-}
-
-function isMonitorablePedido(pedido: PedidoResponse): boolean {
-  return MONITORABLE_STATUSES.has(pedido.status);
+  return "Falha ao carregar pedidos.";
 }
 
 function getPedidoDescription(pedido: PedidoResponse): string {
-  if (pedido.descricao && pedido.descricao.trim().length > 0) {
+  if (pedido.descricao !== null && pedido.descricao.trim().length > 0) {
     return pedido.descricao;
   }
 
   return "Pedido sem descricao operacional.";
 }
 
-function getPedidoStatusClassName(status: PedidoResponse["status"]): string {
-  return STATUS_CLASS_NAME[status] ?? "border-border bg-muted text-muted-foreground";
+function renderChevron(): ReactElement {
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[var(--text-secondary)]"
+    >
+      <svg
+        width="12"
+        height="8"
+        viewBox="0 0 12 8"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M1 1.5L6 6.5L11 1.5"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
 }
 
 function renderLoadingState(): ReactElement {
   return (
-    <div className={GRID_CLASS_NAME}>
-      {Array.from({ length: 6 }, (_, index) => (
-        <Skeleton
-          key={`monitoring-selector-skeleton-${index}`}
-          className="h-40 rounded-xl"
-        />
-      ))}
+    <div className="flex flex-col gap-3">
+      <Skeleton className="h-10 rounded-[var(--radius-sm)]" />
+      <div className={GRID_CLASS_NAME}>
+        <Skeleton className="h-28 rounded-[var(--radius-md)]" />
+        <Skeleton className="h-28 rounded-[var(--radius-md)]" />
+      </div>
     </div>
   );
 }
 
-function renderEmptyState(): ReactElement {
-  return (
-    <Card className="border border-border bg-card">
-      <CardHeader>
-        <CardTitle>Nenhum pedido pronto para monitoramento</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">
-          Assim que um pedido estiver com status calculado ou despachado, ele aparecera aqui.
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
+function renderPedidoPreviewCard(pedido: PedidoResponse): ReactElement {
+  const badgeClassName = getMonitoringBadgeClassName(pedido.status);
 
-function renderPedidoCard(
-  pedido: PedidoResponse,
-  onSelect: (pedidoId: number) => void,
-): ReactElement {
   return (
-    <Card key={pedido.id} className="border border-border bg-card">
-      <CardHeader className="gap-3">
-        <div className="flex items-start justify-between gap-3">
-          <CardTitle className="text-lg">Pedido #{pedido.id}</CardTitle>
-          <Badge
-            variant="outline"
-            className={`rounded-md px-3 text-sm font-medium ${getPedidoStatusClassName(
-              pedido.status,
-            )}`}
-          >
-            {pedido.status}
-          </Badge>
+    <article key={pedido.id} className={CARD_CLASS_NAME}>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+            Pedido #{pedido.id}
+          </h2>
+          <p className="text-xs text-[var(--text-secondary)]">
+            Farmacia #{pedido.farmacia_id}
+          </p>
         </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-          <p>{getPedidoDescription(pedido)}</p>
-          <p>Farmacia #{pedido.farmacia_id}</p>
-        </div>
-        <Button type="button" onClick={() => onSelect(pedido.id)}>
-          Monitorar pedido
-        </Button>
-      </CardContent>
-    </Card>
+        <span
+          className={`badge ${badgeClassName}`}
+          translate="no"
+        >
+          {pedido.status}
+        </span>
+      </div>
+      <p className="text-sm text-[var(--text-secondary)]">
+        {getPedidoDescription(pedido)}
+      </p>
+    </article>
   );
 }
 
@@ -127,9 +128,10 @@ export function MonitoringSelector(): ReactElement {
     staleTime: 10_000,
     refetchInterval: false,
   });
-
-  const monitorablePedidos = useMemo(() => {
-    return (pedidosQuery.data?.pedidos ?? []).filter(isMonitorablePedido);
+  const selectablePedidos = useMemo(() => {
+    return (pedidosQuery.data?.pedidos ?? []).filter((pedido) =>
+      isPedidoSelectable(pedido.status),
+    );
   }, [pedidosQuery.data?.pedidos]);
 
   useEffect(() => {
@@ -140,32 +142,67 @@ export function MonitoringSelector(): ReactElement {
     toast.error(getErrorMessage(pedidosQuery.error));
   }, [pedidosQuery.error, pedidosQuery.isError]);
 
-  function handleSelectPedido(pedidoId: number): void {
-    navigate(`/monitoramento/${pedidoId}`);
+  function handleChange(event: ChangeEvent<HTMLSelectElement>): void {
+    const nextPedidoId = Number(event.target.value);
+
+    if (!Number.isInteger(nextPedidoId) || nextPedidoId <= 0) {
+      return;
+    }
+
+    navigate(`/monitoramento/${nextPedidoId}`);
   }
 
   return (
     <section className={PAGE_CLASS_NAME}>
       <div className={CONTENT_CLASS_NAME}>
         <header className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold text-foreground">
-            Selecionar pedido para monitoramento
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Escolha um pedido calculado ou despachado para iniciar o acompanhamento em tempo real.
+          <h1 className={TITLE_CLASS_NAME}>Selecionar Pedido</h1>
+          <p className={DESCRIPTION_CLASS_NAME}>
+            Escolha um pedido pendente ou calculado para abrir o dashboard de
+            monitoramento.
           </p>
         </header>
 
         {pedidosQuery.isLoading ? renderLoadingState() : null}
 
-        {!pedidosQuery.isLoading && monitorablePedidos.length === 0
-          ? renderEmptyState()
-          : null}
+        {!pedidosQuery.isLoading ? (
+          <div className="flex flex-col gap-4">
+            <label
+              htmlFor="monitoring-pedido-select"
+              className="text-sm font-medium text-[var(--text-secondary)]"
+            >
+              Pedido disponivel
+            </label>
 
-        {!pedidosQuery.isLoading && monitorablePedidos.length > 0 ? (
-          <div className={GRID_CLASS_NAME}>
-            {monitorablePedidos.map((pedido) =>
-              renderPedidoCard(pedido, handleSelectPedido),
+            <div className={SELECT_WRAPPER_CLASS_NAME}>
+              <select
+                id="monitoring-pedido-select"
+                name="monitoring-pedido-select"
+                aria-label="Selecionar pedido para monitoramento"
+                className={SELECT_CLASS_NAME}
+                defaultValue={PLACEHOLDER_VALUE}
+                onChange={handleChange}
+              >
+                <option value={PLACEHOLDER_VALUE} disabled>
+                  Selecione um pedido para monitorar
+                </option>
+                {selectablePedidos.map((pedido) => (
+                  <option key={pedido.id} value={pedido.id}>
+                    Pedido #{pedido.id} · {pedido.status}
+                  </option>
+                ))}
+              </select>
+              {renderChevron()}
+            </div>
+
+            {selectablePedidos.length === 0 ? (
+              <div className={EMPTY_STATE_CLASS_NAME}>
+                Nenhum pedido pendente ou calculado esta disponivel no momento.
+              </div>
+            ) : (
+              <div className={GRID_CLASS_NAME}>
+                {selectablePedidos.map(renderPedidoPreviewCard)}
+              </div>
             )}
           </div>
         ) : null}

@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-  type MutableRefObject,
-} from "react";
+import { useEffect } from "react";
 
 import type { WSTelemetriaPayload } from "../../../types/api";
 import { useTelemetryStore } from "../store/useTelemetryStore";
@@ -42,15 +36,10 @@ function isWSTelemetriaPayload(value: unknown): value is WSTelemetriaPayload {
   );
 }
 
-function clearReconnectTimer(
-  timerRef: MutableRefObject<number | null>,
-): void {
-  if (timerRef.current === null) {
-    return;
+function clearReconnectTimer(timerId: number | null): void {
+  if (timerId !== null) {
+    window.clearTimeout(timerId);
   }
-
-  window.clearTimeout(timerRef.current);
-  timerRef.current = null;
 }
 
 function getReconnectDelay(attempt: number): number {
@@ -72,123 +61,110 @@ function buildWebSocketUrl(droneId: string): string {
 export function useOrderStream(droneId: string): OrderStreamState {
   const setFrame = useTelemetryStore((state) => state.setFrame);
   const appendHistory = useTelemetryStore((state) => state.appendHistory);
-  const socketRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<number | null>(null);
-  const reconnectAttemptsRef = useRef(0);
-  const shouldReconnectRef = useRef(true);
-  const [connected, setConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const setStreamState = useTelemetryStore((state) => state.setStreamState);
+  const connected = useTelemetryStore((state) => state.streamConnected);
+  const error = useTelemetryStore((state) => state.streamError);
 
-  const handleMessage = useEffectEvent((event: MessageEvent<string>) => {
-    try {
-      const parsedPayload: unknown = JSON.parse(event.data);
+  useEffect(() => {
+    if (!droneId) {
+      setStreamState(false, null);
+      return;
+    }
 
-      if (!isWSTelemetriaPayload(parsedPayload)) {
-        setError("Payload de telemetria invalido recebido pelo WebSocket.");
+    let reconnectAttempts = 0;
+    let reconnectTimerId: number | null = null;
+    let socket: WebSocket | null = null;
+    let cancelled = false;
+
+    const connect = (): void => {
+      if (cancelled) {
         return;
       }
 
-      setFrame(parsedPayload);
-      appendHistory(parsedPayload);
-      setError(null);
-    } catch (caughtError) {
-      const message =
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Falha desconhecida ao processar telemetria.";
+      try {
+        socket = new WebSocket(buildWebSocketUrl(droneId));
 
-      setError(`Falha ao processar mensagem do WebSocket: ${message}`);
-    }
-  });
+        socket.onopen = () => {
+          reconnectAttempts = 0;
+          setStreamState(true, null);
+        };
 
-  const connect = useEffectEvent(() => {
-    if (!droneId || !shouldReconnectRef.current) {
-      return;
-    }
+        socket.onmessage = (event) => {
+          try {
+            const parsedPayload: unknown = JSON.parse(event.data);
 
-    if (socketRef.current !== null) {
-      return;
-    }
+            if (!isWSTelemetriaPayload(parsedPayload)) {
+              setStreamState(
+                false,
+                "Payload de telemetria invalido recebido pelo WebSocket.",
+              );
+              return;
+            }
 
-    clearReconnectTimer(reconnectTimerRef);
+            setFrame(parsedPayload);
+            appendHistory(parsedPayload);
+            setStreamState(true, null);
+          } catch (caughtError) {
+            const message =
+              caughtError instanceof Error
+                ? caughtError.message
+                : "Falha desconhecida ao processar telemetria.";
 
-    try {
-      const wsUrl = buildWebSocketUrl(droneId);
-      const socket = new WebSocket(wsUrl);
+            setStreamState(
+              false,
+              `Falha ao processar mensagem do WebSocket: ${message}`,
+            );
+          }
+        };
 
-      socketRef.current = socket;
+        socket.onerror = () => {
+          setStreamState(false, "Erro de conexao no canal de telemetria.");
+        };
 
-      socket.onopen = () => {
-        reconnectAttemptsRef.current = 0;
-        setConnected(true);
-        setError(null);
-      };
+        socket.onclose = (event) => {
+          socket = null;
+          setStreamState(false, null);
 
-      socket.onmessage = (event) => {
-        handleMessage(event);
-      };
+          if (
+            cancelled ||
+            event.code === NORMAL_CLOSE_CODE ||
+            reconnectAttempts >= MAX_RECONNECT_ATTEMPTS
+          ) {
+            if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+              setStreamState(
+                false,
+                "Nao foi possivel reconectar ao stream de telemetria.",
+              );
+            }
 
-      socket.onerror = () => {
-        setConnected(false);
-        setError("Erro de conexao no canal de telemetria.");
-      };
+            return;
+          }
 
-      socket.onclose = (event) => {
-        setConnected(false);
-        socketRef.current = null;
+          reconnectTimerId = window.setTimeout(() => {
+            reconnectAttempts += 1;
+            connect();
+          }, getReconnectDelay(reconnectAttempts));
+        };
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Falha desconhecida ao abrir WebSocket.";
 
-        if (!shouldReconnectRef.current || event.code === NORMAL_CLOSE_CODE) {
-          return;
-        }
-
-        if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-          setError("Nao foi possivel reconectar ao stream de telemetria.");
-          return;
-        }
-
-        const attempt = reconnectAttemptsRef.current;
-        const delay = getReconnectDelay(attempt);
-
-        reconnectAttemptsRef.current += 1;
-        reconnectTimerRef.current = window.setTimeout(() => {
-          connect();
-        }, delay);
-      };
-    } catch (caughtError) {
-      const message =
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Falha desconhecida ao abrir WebSocket.";
-
-      setConnected(false);
-      setError(`Nao foi possivel iniciar o stream: ${message}`);
-    }
-  });
-
-  useEffect(() => {
-    shouldReconnectRef.current = true;
-    reconnectAttemptsRef.current = 0;
-    setConnected(false);
-
-    if (!droneId) {
-      setError(null);
-      return () => {
-        shouldReconnectRef.current = false;
-        clearReconnectTimer(reconnectTimerRef);
-        socketRef.current?.close();
-        socketRef.current = null;
-      };
-    }
+        setStreamState(false, `Nao foi possivel iniciar o stream: ${message}`);
+      }
+    };
 
     connect();
 
     return () => {
-      shouldReconnectRef.current = false;
-      clearReconnectTimer(reconnectTimerRef);
-      socketRef.current?.close();
-      socketRef.current = null;
+      cancelled = true;
+      clearReconnectTimer(reconnectTimerId);
+      socket?.close();
+      socket = null;
+      setStreamState(false, null);
     };
-  }, [connect, droneId]);
+  }, [appendHistory, droneId, setFrame, setStreamState]);
 
   return { connected, error };
 }

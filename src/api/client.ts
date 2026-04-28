@@ -5,6 +5,22 @@ const AUTHORIZATION_HEADER = "Authorization";
 const CONTENT_TYPE_HEADER = "Content-Type";
 const BEARER_PREFIX = "Bearer";
 
+export class ApiError extends Error {
+  status: number;
+  detail?: HTTPValidationError["detail"];
+
+  constructor(
+    status: number,
+    message: string,
+    detail?: HTTPValidationError["detail"],
+  ) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
 function normalizeBaseUrl(baseUrl?: string): string {
   if (baseUrl === undefined) {
     return "";
@@ -32,13 +48,16 @@ function isJsonResponse(response: Response): boolean {
 
 async function parseErrorResponse(response: Response): Promise<never> {
   if (isJsonResponse(response)) {
-    const validationError =
-      (await response.json()) as HTTPValidationError;
+    const validationError = (await response.json()) as HTTPValidationError;
 
-    throw validationError;
+    throw new ApiError(
+      response.status,
+      validationError.detail?.[0]?.msg ?? `HTTP ${response.status}`,
+      validationError.detail,
+    );
   }
 
-  throw new Error(`HTTP ${response.status}`);
+  throw new ApiError(response.status, `HTTP ${response.status}`);
 }
 
 async function parseSuccessResponse<T>(response: Response): Promise<T> {

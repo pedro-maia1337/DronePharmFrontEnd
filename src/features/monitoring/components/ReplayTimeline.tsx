@@ -8,17 +8,17 @@ import type { TelemetriaResponse } from "@/types/api";
 
 import { useTelemetryStore } from "../store/useTelemetryStore";
 
-const DEFAULT_SPEED = 1;
 const SPEED_OPTIONS = [0.5, 1, 2, 4] as const;
-const REPLAY_LABEL = "Modo Replay";
-const EMPTY_LABEL = "--";
-const TIMELINE_CLASS_NAME =
-  "flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4";
-const SPEED_BUTTON_GROUP_CLASS_NAME = "flex flex-wrap gap-2";
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("pt-BR", {
   dateStyle: "short",
   timeStyle: "medium",
 });
+const SECTION_CLASS_NAME =
+  "border-b border-[var(--surface-border)] px-5 py-[14px]";
+const TITLE_CLASS_NAME =
+  "mb-[10px] text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]";
+const WRAPPER_CLASS_NAME =
+  "rounded-[var(--radius-lg)] border border-[var(--surface-border)] bg-[var(--surface-overlay)] p-[13px]";
 
 type ReplaySpeed = (typeof SPEED_OPTIONS)[number];
 
@@ -30,14 +30,6 @@ function getFrameTimestamp(frame: TelemetriaResponse): number {
   return Date.parse(frame.criado_em);
 }
 
-function clampIndex(index: number, history: TelemetriaResponse[]): number {
-  return Math.min(Math.max(index, 0), getSliderMax(history));
-}
-
-function clampProgress(value: number): number {
-  return Math.min(Math.max(value, 0), 1);
-}
-
 function getFrameByIndex(
   history: TelemetriaResponse[],
   index: number,
@@ -46,21 +38,21 @@ function getFrameByIndex(
     return null;
   }
 
-  return history[clampIndex(index, history)];
+  const clampedIndex = Math.min(Math.max(index, 0), getSliderMax(history));
+
+  return history[clampedIndex];
 }
 
 function formatFrameTimestamp(frame: TelemetriaResponse | null): string {
   if (frame === null) {
-    return EMPTY_LABEL;
+    return "--";
   }
 
-  const timestamp = getFrameTimestamp(frame);
+  return DATE_TIME_FORMATTER.format(getFrameTimestamp(frame));
+}
 
-  if (Number.isNaN(timestamp)) {
-    return EMPTY_LABEL;
-  }
-
-  return DATE_TIME_FORMATTER.format(timestamp);
+function getCurrentTimestamp(): number {
+  return window.performance.timeOrigin + window.performance.now();
 }
 
 function buildInterpolatedFrame(
@@ -70,9 +62,11 @@ function buildInterpolatedFrame(
 ): TelemetriaResponse {
   const currentTimestamp = getFrameTimestamp(currentFrame);
   const nextTimestamp = getFrameTimestamp(nextFrame);
-  const duration = nextTimestamp - currentTimestamp;
-  const safeDuration = duration <= 0 ? 1 : duration;
-  const progress = clampProgress((replayTimestamp - currentTimestamp) / safeDuration);
+  const duration = Math.max(nextTimestamp - currentTimestamp, 1);
+  const progress = Math.min(
+    Math.max((replayTimestamp - currentTimestamp) / duration, 0),
+    1,
+  );
 
   return {
     ...currentFrame,
@@ -88,41 +82,16 @@ function buildInterpolatedFrame(
   };
 }
 
-function getSegmentIndex(
-  history: TelemetriaResponse[],
-  replayTimestamp: number,
-  currentIndex: number,
-): number {
-  const lastIndex = getSliderMax(history);
-  let segmentIndex = clampIndex(currentIndex, history);
-
-  while (
-    segmentIndex < lastIndex - 1 &&
-    replayTimestamp >= getFrameTimestamp(history[segmentIndex + 1])
-  ) {
-    segmentIndex += 1;
-  }
-
-  while (
-    segmentIndex > 0 &&
-    replayTimestamp < getFrameTimestamp(history[segmentIndex])
-  ) {
-    segmentIndex -= 1;
-  }
-
-  return segmentIndex;
-}
-
 export function ReplayTimeline(): ReactElement {
   const history = useTelemetryStore((state) => state.history);
   const isReplaying = useTelemetryStore((state) => state.isReplaying);
   const setReplaying = useTelemetryStore((state) => state.setReplaying);
   const setFrame = useTelemetryStore((state) => state.setFrame);
+  const [sliderValue, setSliderValue] = useState(0);
+  const [playbackSpeed, setPlaybackSpeed] = useState<ReplaySpeed>(1);
   const intervalIdRef = useRef<number | null>(null);
   const currentIndexRef = useRef(0);
   const replayOffsetRef = useRef<number | null>(null);
-  const [sliderValue, setSliderValue] = useState(0);
-  const [playbackSpeed, setPlaybackSpeed] = useState<ReplaySpeed>(DEFAULT_SPEED);
 
   function clearReplayInterval(): void {
     if (intervalIdRef.current === null) {
@@ -133,21 +102,21 @@ export function ReplayTimeline(): ReactElement {
     intervalIdRef.current = null;
   }
 
-  function stopReplay(): void {
-    clearReplayInterval();
-    setReplaying(false);
-  }
+  function syncFrame(index: number): void {
+    const nextFrame = getFrameByIndex(history, index);
 
-  function syncFrameAtIndex(index: number): void {
-    const frame = getFrameByIndex(history, index);
-
-    if (frame === null) {
+    if (nextFrame === null) {
       return;
     }
 
-    currentIndexRef.current = clampIndex(index, history);
-    setSliderValue(currentIndexRef.current);
-    setFrame(frame);
+    currentIndexRef.current = index;
+    setSliderValue(index);
+    setFrame(nextFrame);
+  }
+
+  function stopReplay(): void {
+    clearReplayInterval();
+    setReplaying(false);
   }
 
   function tickReplay(): void {
@@ -156,140 +125,132 @@ export function ReplayTimeline(): ReactElement {
       return;
     }
 
-    const replayTimestamp = Date.now() - replayOffsetRef.current;
+    const replayTimestamp = getCurrentTimestamp() - replayOffsetRef.current;
     const lastIndex = getSliderMax(history);
     const lastFrame = history[lastIndex];
-    const lastTimestamp = getFrameTimestamp(lastFrame);
 
-    if (replayTimestamp >= lastTimestamp) {
-      currentIndexRef.current = lastIndex;
-      setSliderValue(lastIndex);
-      setFrame(lastFrame);
+    if (replayTimestamp >= getFrameTimestamp(lastFrame)) {
+      syncFrame(lastIndex);
       stopReplay();
       return;
     }
 
-    const segmentIndex = getSegmentIndex(
-      history,
-      replayTimestamp,
-      currentIndexRef.current,
-    );
+    let segmentIndex = currentIndexRef.current;
+
+    while (
+      segmentIndex < lastIndex - 1 &&
+      replayTimestamp >= getFrameTimestamp(history[segmentIndex + 1])
+    ) {
+      segmentIndex += 1;
+    }
+
     const currentFrame = history[segmentIndex];
     const nextFrame = history[segmentIndex + 1];
-    const interpolatedFrame = buildInterpolatedFrame(
-      currentFrame,
-      nextFrame,
-      replayTimestamp,
-    );
 
     currentIndexRef.current = segmentIndex;
     setSliderValue(segmentIndex);
-    setFrame(interpolatedFrame);
+    setFrame(buildInterpolatedFrame(currentFrame, nextFrame, replayTimestamp));
   }
 
-  function startReplayInterval(): void {
+  function startReplay(): void {
     clearReplayInterval();
-    intervalIdRef.current = window.setInterval(
-      tickReplay,
-      1000 / playbackSpeed,
-    );
+    intervalIdRef.current = window.setInterval(tickReplay, 1000 / playbackSpeed);
   }
 
   function handleReplayToggle(checked: boolean): void {
-    if (!checked) {
-      clearReplayInterval();
-      setReplaying(false);
-      return;
-    }
-
-    if (history.length < 2) {
-      setReplaying(false);
-      syncFrameAtIndex(currentIndexRef.current);
+    if (!checked || history.length < 2) {
+      stopReplay();
       return;
     }
 
     const startFrame = getFrameByIndex(history, currentIndexRef.current);
 
     if (startFrame === null) {
-      setReplaying(false);
+      stopReplay();
       return;
     }
 
-    replayOffsetRef.current = Date.now() - getFrameTimestamp(startFrame);
+    replayOffsetRef.current = getCurrentTimestamp() - getFrameTimestamp(startFrame);
     setReplaying(true);
-    startReplayInterval();
+    startReplay();
   }
 
   function handleSliderChange(values: number[]): void {
-    const nextValue = values[0] ?? 0;
-
-    clearReplayInterval();
-    setReplaying(false);
-    syncFrameAtIndex(nextValue);
+    stopReplay();
+    syncFrame(values[0] ?? 0);
   }
 
   function handleSpeedChange(speed: ReplaySpeed): void {
     setPlaybackSpeed(speed);
 
-    if (!isReplaying) {
-      return;
+    if (isReplaying) {
+      startReplay();
     }
-
-    startReplayInterval();
   }
 
   useEffect(() => {
-    const nextMaxIndex = getSliderMax(history);
-    const nextIndex = Math.min(currentIndexRef.current, nextMaxIndex);
+    const nextIndex = Math.min(currentIndexRef.current, getSliderMax(history));
 
-    clearReplayInterval();
-    setReplaying(false);
+    stopReplay();
     currentIndexRef.current = nextIndex;
     setSliderValue(nextIndex);
+  }, [history]);
 
+  useEffect(() => {
     return () => {
       clearReplayInterval();
     };
-  }, [history]);
+  }, []);
 
   const currentTimelineFrame = getFrameByIndex(history, sliderValue);
-  const sliderMax = getSliderMax(history);
 
   return (
-    <div className={TIMELINE_CLASS_NAME}>
-      <div className="flex items-center justify-between gap-3">
-        <label className="text-sm font-medium text-muted-foreground">
-          {REPLAY_LABEL}
-        </label>
-        <Switch checked={isReplaying} onCheckedChange={handleReplayToggle} />
-      </div>
-
-      <Slider
-        value={[sliderValue]}
-        min={0}
-        max={sliderMax}
-        step={1}
-        disabled={history.length === 0}
-        onValueChange={handleSliderChange}
-      />
-
-      <div className={SPEED_BUTTON_GROUP_CLASS_NAME}>
-        {SPEED_OPTIONS.map((speed) => (
-          <Button
-            key={speed}
-            type="button"
-            size="sm"
-            variant={playbackSpeed === speed ? "default" : "outline"}
-            onClick={() => handleSpeedChange(speed)}
+    <section className={SECTION_CLASS_NAME} aria-label="Replay de telemetria">
+      <div className={TITLE_CLASS_NAME}>Replay de Telemetria</div>
+      <div className={WRAPPER_CLASS_NAME}>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <label
+            htmlFor="replay-toggle"
+            className="flex items-center gap-2 text-sm text-[var(--text-secondary)]"
           >
-            {speed}x
-          </Button>
-        ))}
-      </div>
+            <Switch
+              id="replay-toggle"
+              checked={isReplaying}
+              disabled={history.length < 2}
+              onCheckedChange={handleReplayToggle}
+            />
+            Modo Replay ativo
+          </label>
 
-      <p className="font-mono text-xs tabular-nums text-muted-foreground">
-        {formatFrameTimestamp(currentTimelineFrame)}
-      </p>
-    </div>
+          <div className="flex gap-1">
+            {SPEED_OPTIONS.map((speed) => (
+              <Button
+                key={speed}
+                type="button"
+                size="sm"
+                variant={playbackSpeed === speed ? "default" : "outline"}
+                onClick={() => handleSpeedChange(speed)}
+              >
+                {speed}x
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <Slider
+          aria-label="Linha do tempo do replay"
+          value={[sliderValue]}
+          min={0}
+          max={getSliderMax(history)}
+          step={1}
+          disabled={history.length === 0}
+          onValueChange={handleSliderChange}
+        />
+
+        <div className="mt-2 text-right font-mono text-xs tabular-nums text-[var(--text-muted)]">
+          {formatFrameTimestamp(currentTimelineFrame)}
+        </div>
+      </div>
+    </section>
   );
 }

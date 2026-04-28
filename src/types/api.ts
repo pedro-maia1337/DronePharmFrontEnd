@@ -194,13 +194,16 @@ export interface PedidoAtivoResponse {
   status: PedidoStatus;
   rota?: RotaResponse | null;
   drone?: DroneResponse | null;
+  posicao_atual: PosicaoAtualResponse | null;
+  pedido: PedidoResumoTrackingResponse;
+  criado_em?: string;
+  despachado_em?: string | null;
   eta_segundos?: number | null;
+  tempo_decorrido_s?: number | null;
   estimativa_entrega_em?: string | null;
   tempo_decorrido_seg?: number | null;
   tempo_restante_seg?: number | null;
-  posicao_atual: PosicaoAtualResponse;
-  destino: DestinoPedidoResponse;
-  pedido: PedidoResumoTrackingResponse;
+  destino?: DestinoPedidoResponse;
 }
 
 export interface TelemetriaResponse {

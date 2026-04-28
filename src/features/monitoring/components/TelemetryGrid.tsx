@@ -2,64 +2,90 @@ import type { ReactElement } from "react";
 
 import { AlertTriangle } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { formatEta } from "@/lib/utils";
-import type { TelemetriaResponse } from "@/types/api";
+import type { PosicaoAtualResponse, TelemetriaResponse } from "@/types/api";
 
 import { useTelemetryStore } from "../store/useTelemetryStore";
 
 const BATTERY_ALERT_THRESHOLD = 0.2;
-const METERS_UNIT = "m";
-const KMH_UNIT = "km/h";
-const PERCENT_UNIT = "%";
-const WIND_UNIT = "m/s";
+const KMH_FACTOR = 3.6;
 const EMPTY_VALUE = "--";
-const MS_TO_KMH_FACTOR = 3.6;
+const GRID_CLASS_NAME = "grid grid-cols-2 gap-[7px]";
+const CARD_CLASS_NAME =
+  "rounded-[var(--radius-md)] border border-[var(--surface-border)] bg-[var(--surface-card)] px-[13px] py-[11px] shadow-[var(--shadow-card)]";
+const ALERT_CARD_CLASS_NAME =
+  "border-[var(--status-danger)] bg-[rgba(239,68,68,0.06)]";
+const ACCENT_CARD_CLASS_NAME =
+  "border-[var(--surface-border)] bg-[var(--surface-card)] [&_.metric-value]:text-[var(--accent)]";
+const LABEL_CLASS_NAME =
+  "mb-[5px] flex items-center gap-[5px] text-[0.6875rem] uppercase tracking-[0.06em] text-[var(--text-secondary)]";
+const VALUE_CLASS_NAME =
+  "metric-value font-[var(--font-data)] text-[1.4375rem] leading-none tabular-nums text-[var(--text-primary)]";
+const UNIT_CLASS_NAME =
+  "ml-1 font-sans text-xs text-[var(--text-muted)] not-italic";
 
 interface TelemetryGridProps {
   etaSegundos: number | null;
+  progressPct: number | null;
+  connected: boolean;
+  positionSnapshot: PosicaoAtualResponse | null;
 }
 
-interface MetricCardData {
+interface MetricCard {
   key: string;
   label: string;
   value: string;
   unit?: string;
-  isBatteryAlert?: boolean;
+  variant?: "default" | "alert" | "accent";
 }
 
-function getElapsedSeconds(history: TelemetriaResponse[]): number {
-  if (history.length < 2) {
-    return 0;
-  }
-
-  const firstFrame = history[0];
-  const lastFrame = history[history.length - 1];
-  const firstTimestamp = new Date(firstFrame.criado_em).getTime();
-  const lastTimestamp = new Date(lastFrame.criado_em).getTime();
-
-  if (Number.isNaN(firstTimestamp) || Number.isNaN(lastTimestamp)) {
-    return 0;
-  }
-
-  return Math.max(0, Math.floor((lastTimestamp - firstTimestamp) / 1000));
-}
-
-function formatMetricValue(value: number, fractionDigits = 0): string {
+function formatNumber(value: number, fractionDigits = 0): string {
   return value.toFixed(fractionDigits);
 }
 
-function getVelocityValue(frame: TelemetriaResponse): string {
-  return formatMetricValue(frame.velocidade_ms * MS_TO_KMH_FACTOR, 1);
+function formatPercent(value: number): string {
+  return formatNumber(value * 100);
 }
 
-function getAltitudeValue(frame: TelemetriaResponse): string {
-  return formatMetricValue(frame.altitude_m);
+function getSignalValue(connected: boolean, historyLength: number): string {
+  if (connected) {
+    return "Ao vivo";
+  }
+
+  if (historyLength > 0) {
+    return "Replay";
+  }
+
+  return "Offline";
 }
 
-function getBatteryValue(frame: TelemetriaResponse): string {
-  return formatMetricValue(frame.bateria_pct * 100);
+function getAltitudeValue(
+  currentFrame: TelemetriaResponse | null,
+  positionSnapshot: PosicaoAtualResponse | null,
+): string {
+  const altitude = currentFrame?.altitude_m ?? positionSnapshot?.altitude_m;
+
+  if (altitude === null || altitude === undefined) {
+    return EMPTY_VALUE;
+  }
+
+  return formatNumber(altitude);
+}
+
+function getVelocityValue(currentFrame: TelemetriaResponse | null): string {
+  if (currentFrame === null) {
+    return EMPTY_VALUE;
+  }
+
+  return formatNumber(currentFrame.velocidade_ms * KMH_FACTOR, 0);
+}
+
+function getBatteryValue(currentFrame: TelemetriaResponse | null): string {
+  if (currentFrame === null) {
+    return EMPTY_VALUE;
+  }
+
+  return formatPercent(currentFrame.bateria_pct);
 }
 
 function getEtaValue(etaSegundos: number | null): string {
@@ -70,137 +96,134 @@ function getEtaValue(etaSegundos: number | null): string {
   return formatEta(etaSegundos);
 }
 
-function getElapsedValue(history: TelemetriaResponse[]): string {
-  return formatEta(getElapsedSeconds(history));
+function getProgressValue(progressPct: number | null): string {
+  if (progressPct === null) {
+    return EMPTY_VALUE;
+  }
+
+  return String(progressPct);
 }
 
-function getWindValue(frame: TelemetriaResponse): string {
-  return formatMetricValue(frame.vento_ms, 1);
+function getCardClassName(card: MetricCard): string {
+  if (card.variant === "alert") {
+    return `${CARD_CLASS_NAME} ${ALERT_CARD_CLASS_NAME}`;
+  }
+
+  if (card.variant === "accent") {
+    return `${CARD_CLASS_NAME} ${ACCENT_CARD_CLASS_NAME}`;
+  }
+
+  return CARD_CLASS_NAME;
+}
+
+function renderAlertIcon(card: MetricCard): ReactElement | null {
+  if (card.variant !== "alert") {
+    return null;
+  }
+
+  return (
+    <AlertTriangle
+      aria-hidden="true"
+      className="size-3 text-[var(--status-danger)]"
+    />
+  );
+}
+
+function renderUnit(unit?: string): ReactElement | null {
+  if (unit === undefined) {
+    return null;
+  }
+
+  return <span className={UNIT_CLASS_NAME}>{unit}</span>;
 }
 
 function buildMetricCards(
-  currentFrame: TelemetriaResponse,
-  history: TelemetriaResponse[],
+  currentFrame: TelemetriaResponse | null,
+  positionSnapshot: PosicaoAtualResponse | null,
+  connected: boolean,
+  historyLength: number,
   etaSegundos: number | null,
-): MetricCardData[] {
+  progressPct: number | null,
+): MetricCard[] {
   return [
     {
       key: "velocidade",
       label: "Velocidade",
       value: getVelocityValue(currentFrame),
-      unit: KMH_UNIT,
+      unit: "km/h",
     },
     {
-      key: "altitude",
-      label: "Altitude",
-      value: getAltitudeValue(currentFrame),
-      unit: METERS_UNIT,
+      key: "altura",
+      label: "Altura",
+      value: getAltitudeValue(currentFrame, positionSnapshot),
+      unit: "m",
     },
     {
       key: "bateria",
       label: "Bateria",
       value: getBatteryValue(currentFrame),
-      unit: PERCENT_UNIT,
-      isBatteryAlert: currentFrame.bateria_pct < BATTERY_ALERT_THRESHOLD,
+      unit: "%",
+      variant:
+        currentFrame !== null && currentFrame.bateria_pct < BATTERY_ALERT_THRESHOLD
+          ? "alert"
+          : "default",
     },
     {
       key: "eta",
       label: "ETA",
       value: getEtaValue(etaSegundos),
+      variant: "accent",
     },
     {
-      key: "tempo-decorrido",
-      label: "Tempo Decorrido",
-      value: getElapsedValue(history),
+      key: "sinal",
+      label: "Sinal",
+      value: getSignalValue(connected, historyLength),
     },
     {
-      key: "vento",
-      label: "Vento",
-      value: getWindValue(currentFrame),
-      unit: WIND_UNIT,
+      key: "progresso",
+      label: "Progresso",
+      value: getProgressValue(progressPct),
+      unit: "%",
     },
   ];
 }
 
-function renderSkeletonCards(): ReactElement[] {
-  return Array.from({ length: 6 }, (_, index) => (
-    <Card
-      key={`telemetry-skeleton-${index}`}
-      size="sm"
-      className="border border-border bg-card"
-    >
-      <CardHeader className="gap-2">
-        <Skeleton className="h-3 w-24" />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className="h-8 w-28" />
-      </CardContent>
-    </Card>
-  ));
-}
-
-function getMetricCardClassName(card: MetricCardData): string {
-  if (card.isBatteryAlert) {
-    return "border border-destructive/60 bg-destructive/10";
-  }
-
-  return "border border-border bg-card";
-}
-
-function renderMetricCardIcon(card: MetricCardData): ReactElement | null {
-  if (!card.isBatteryAlert) {
-    return null;
-  }
-
-  return <AlertTriangle className="size-3.5 text-destructive" />;
-}
-
-function renderMetricCardUnit(card: MetricCardData): ReactElement | null {
-  if (!card.unit) {
-    return null;
-  }
-
-  return (
-    <span className="ml-1 text-sm font-normal text-muted-foreground">
-      {card.unit}
-    </span>
-  );
-}
-
-function renderMetricCard(card: MetricCardData): ReactElement {
-  return (
-    <Card key={card.key} size="sm" className={getMetricCardClassName(card)}>
-      <CardHeader className="gap-2">
-        <CardTitle className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.06em] text-muted-foreground">
-          {renderMetricCardIcon(card)}
-          {card.label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="font-mono text-2xl font-semibold tabular-nums text-foreground">
-          {card.value}
-          {renderMetricCardUnit(card)}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
 export function TelemetryGrid({
   etaSegundos,
+  progressPct,
+  connected,
+  positionSnapshot,
 }: TelemetryGridProps): ReactElement {
   const currentFrame = useTelemetryStore((state) => state.currentFrame);
-  const history = useTelemetryStore((state) => state.history);
-
-  if (currentFrame === null) {
-    return <div className="grid grid-cols-2 gap-4">{renderSkeletonCards()}</div>;
-  }
-
-  const cards = buildMetricCards(currentFrame, history, etaSegundos);
+  const historyLength = useTelemetryStore((state) => state.history.length);
+  const cards = buildMetricCards(
+    currentFrame,
+    positionSnapshot,
+    connected,
+    historyLength,
+    etaSegundos,
+    progressPct,
+  );
 
   return (
-    <div className="grid grid-cols-2 gap-4">
-      {cards.map((card) => renderMetricCard(card))}
-    </div>
+    <section aria-label="Telemetria" className="flex flex-col gap-[10px]">
+      <div className="text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        Telemetria
+      </div>
+      <div className={GRID_CLASS_NAME}>
+        {cards.map((card) => (
+          <article key={card.key} className={getCardClassName(card)}>
+            <div className={LABEL_CLASS_NAME}>
+              {renderAlertIcon(card)}
+              {card.label}
+            </div>
+            <div className={VALUE_CLASS_NAME}>
+              {card.value}
+              {renderUnit(card.unit)}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }

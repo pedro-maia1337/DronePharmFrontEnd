@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "./styles/tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -126,5 +127,44 @@
     }
   html {
     @apply font-sans;
+    color-scheme: dark;
     }
+}
+
+@layer components {
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    border-radius: var(--radius-sm);
+    padding: 0.125rem 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+  }
+
+  .bn {
+    background: var(--status-neutral-bg);
+    color: var(--status-neutral);
+  }
+
+  .bi {
+    background: var(--status-info-bg);
+    color: var(--status-info);
+  }
+
+  .bk {
+    background: var(--status-lock-bg);
+    color: var(--status-lock);
+  }
+
+  .bo {
+    background: var(--status-ok-bg);
+    color: var(--status-ok);
+  }
+
+  .bd {
+    background: var(--status-danger-bg);
+    color: var(--status-danger);
+  }
 }
