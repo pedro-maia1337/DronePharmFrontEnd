@@ -187,6 +187,24 @@ export interface RotaResponse {
   concluida_em?: string | null;
 }
 
+export interface RoteirizarRequest {
+  drone_id: string;
+  pedido_ids?: number[] | null;
+  forcar_recalc?: boolean;
+  vento_ms?: number | null;
+}
+
+export interface RoteirizarResponse {
+  sucesso: boolean;
+  rotas: RotaResponse[];
+  total_voos: number;
+  distancia_total_km: number;
+  tempo_total_min: number;
+  energia_total_wh: number;
+  mensagem: string;
+  calculado_em: string;
+}
+
 export interface PedidoAtivoResponse {
   pedido_id: number;
   rota_id?: number | null;

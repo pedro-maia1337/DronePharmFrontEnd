@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from "react";
+import { useState, type ChangeEvent, type ReactElement } from "react";
 
 import { Lock } from "lucide-react";
 
@@ -19,6 +19,7 @@ import {
   canCancelPedido,
   getMonitoringBadgeClassName,
   hasFlightLock,
+  isPedidoSelectable,
 } from "../monitoringUtils";
 
 const SECTION_CLASS_NAME =
@@ -34,24 +35,31 @@ const GHOST_BUTTON_CLASS_NAME =
   "h-[34px] rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-transparent px-4 text-[var(--text-secondary)] hover:bg-[var(--surface-overlay)] hover:text-[var(--text-primary)]";
 const DANGER_BUTTON_CLASS_NAME =
   "h-[34px] rounded-[var(--radius-sm)] border border-[rgba(239,68,68,0.3)] bg-[var(--status-danger-bg)] px-4 text-[var(--status-danger)] hover:bg-[rgba(239,68,68,0.18)]";
-const DISABLED_BUTTON_CLASS_NAME = "opacity-30";
+const SELECT_CLASS_NAME =
+  "h-[38px] w-full appearance-none rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-[var(--surface-input)] px-3 pr-10 text-sm text-[var(--text-primary)] outline-none transition-[border-color,box-shadow] duration-150 focus:border-[var(--accent)] focus:shadow-[var(--shadow-focus)]";
+const DISABLED_BUTTON_CLASS_NAME = "bdis opacity-30";
+
+interface DroneOption {
+  value: string;
+  label: string;
+}
 
 interface StatusControlProps {
   status: PedidoStatus;
   pedidoId: number;
   replayEnabled?: boolean;
   replayVisible?: boolean;
+  selectedDroneId?: string;
+  droneOptions?: DroneOption[];
+  isCalculatingRoute?: boolean;
+  isStartingFlight?: boolean;
+  canStartFlight?: boolean;
   onCancelar: () => void;
   onEntregar: () => void;
   onToggleReplay?: () => void;
-}
-
-function getDisabledClassName(disabled: boolean): string | undefined {
-  return disabled ? DISABLED_BUTTON_CLASS_NAME : undefined;
-}
-
-function shouldEnableManualDelivery(_status: PedidoStatus): boolean {
-  return false;
+  onSelectedDroneChange?: (droneId: string) => void;
+  onCalcularRota?: () => void;
+  onIniciarVoo?: () => void;
 }
 
 function renderStatusBadge(status: PedidoStatus): ReactElement {
@@ -64,26 +72,72 @@ function renderStatusBadge(status: PedidoStatus): ReactElement {
   );
 }
 
+function renderDisabledClass(disabled: boolean, baseClassName: string): string {
+  return disabled ? `${baseClassName} ${DISABLED_BUTTON_CLASS_NAME}` : baseClassName;
+}
+
 export function StatusControl({
   status,
   pedidoId,
   replayEnabled = false,
   replayVisible = false,
+  selectedDroneId = "",
+  droneOptions = [],
+  isCalculatingRoute = false,
+  isStartingFlight = false,
+  canStartFlight = false,
   onCancelar,
   onEntregar,
   onToggleReplay = () => {},
+  onSelectedDroneChange = () => {},
+  onCalcularRota = () => {},
+  onIniciarVoo = () => {},
 }: StatusControlProps): ReactElement {
   const [dialogOpen, setDialogOpen] = useState(false);
   const flightLocked = hasFlightLock(status);
   const canCancel = canCancelPedido(status);
-  const canManualDeliver = shouldEnableManualDelivery(status);
-  const canOpenReplay = replayEnabled;
+  const canCalculateRoute = isPedidoSelectable(status);
+  const canShowDroneSelector = canCalculateRoute || status === "calculado";
+  const canManualDeliver = status === "em_voo";
+  const replayDisabled = !replayEnabled;
+
+  function handleDroneChange(event: ChangeEvent<HTMLSelectElement>): void {
+    onSelectedDroneChange(event.target.value);
+  }
 
   return (
     <>
       <section className={SECTION_CLASS_NAME} aria-label="Controle operacional">
         <div className={TITLE_CLASS_NAME}>Controle</div>
         {renderStatusBadge(status)}
+
+        {canShowDroneSelector ? (
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="drone-selector"
+              className="text-sm font-medium text-[var(--text-secondary)]"
+            >
+              Drone de missao
+            </label>
+            <select
+              id="drone-selector"
+              name="drone-selector"
+              aria-label="Selecionar drone da missao"
+              className={SELECT_CLASS_NAME}
+              value={selectedDroneId}
+              onChange={handleDroneChange}
+            >
+              <option value="" disabled>
+                Selecione um drone disponivel
+              </option>
+              {droneOptions.map((drone) => (
+                <option key={drone.value} value={drone.value}>
+                  {drone.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         {flightLocked ? (
           <div className={LOCK_BLOCK_CLASS_NAME}>
@@ -98,9 +152,31 @@ export function StatusControl({
         ) : null}
 
         <div className={ACTION_ROW_CLASS_NAME}>
+          {canCalculateRoute ? (
+            <Button
+              type="button"
+              className={renderDisabledClass(false, PRIMARY_BUTTON_CLASS_NAME)}
+              disabled={isCalculatingRoute}
+              onClick={onCalcularRota}
+            >
+              {isCalculatingRoute ? "Calculando..." : "Calcular Rota"}
+            </Button>
+          ) : null}
+
+          {status === "calculado" ? (
+            <Button
+              type="button"
+              className={renderDisabledClass(!canStartFlight, PRIMARY_BUTTON_CLASS_NAME)}
+              disabled={!canStartFlight || isStartingFlight}
+              onClick={onIniciarVoo}
+            >
+              {isStartingFlight ? "Iniciando..." : "Iniciar Voo"}
+            </Button>
+          ) : null}
+
           <Button
             type="button"
-            className={getDisabledClassName(!canManualDeliver) ?? PRIMARY_BUTTON_CLASS_NAME}
+            className={renderDisabledClass(!canManualDeliver, PRIMARY_BUTTON_CLASS_NAME)}
             disabled={!canManualDeliver}
             onClick={onEntregar}
           >
@@ -111,7 +187,7 @@ export function StatusControl({
             <DialogTrigger asChild>
               <Button
                 type="button"
-                className={getDisabledClassName(!canCancel) ?? DANGER_BUTTON_CLASS_NAME}
+                className={renderDisabledClass(!canCancel, DANGER_BUTTON_CLASS_NAME)}
                 disabled={!canCancel}
               >
                 Cancelar
@@ -143,12 +219,11 @@ export function StatusControl({
 
           <Button
             type="button"
-            className={
-              replayVisible
-                ? PRIMARY_BUTTON_CLASS_NAME
-                : `${GHOST_BUTTON_CLASS_NAME} ${getDisabledClassName(!canOpenReplay) ?? ""}`
-            }
-            disabled={!canOpenReplay}
+            className={renderDisabledClass(
+              replayDisabled && !replayVisible,
+              replayVisible ? PRIMARY_BUTTON_CLASS_NAME : GHOST_BUTTON_CLASS_NAME,
+            )}
+            disabled={replayDisabled}
             onClick={onToggleReplay}
           >
             Modo Replay

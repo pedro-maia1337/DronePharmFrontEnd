@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import type {
+  RotaResponse,
   TelemetriaResponse,
   WSTelemetriaPayload,
 } from "../../../types/api";
@@ -11,10 +12,14 @@ export interface StoreState {
   isReplaying: boolean;
   streamConnected: boolean;
   streamError: string | null;
+  routePreview: [number, number][];
+  selectedDroneId: string;
   setFrame: (frame: TelemetriaResponse) => void;
   appendHistory: (frame: TelemetriaResponse) => void;
   setReplaying: (value: boolean) => void;
   setStreamState: (connected: boolean, error: string | null) => void;
+  setRoutePreview: (rota: RotaResponse | null) => void;
+  setSelectedDroneId: (droneId: string) => void;
   reset: () => void;
 }
 
@@ -36,6 +41,8 @@ export const useTelemetryStore = create<StoreState>((set) => ({
   isReplaying: false,
   streamConnected: false,
   streamError: null,
+  routePreview: [],
+  selectedDroneId: "",
   setFrame: (frame) => {
     set({ currentFrame: frame });
   },
@@ -56,6 +63,16 @@ export const useTelemetryStore = create<StoreState>((set) => ({
   setStreamState: (connected, error) => {
     set({ streamConnected: connected, streamError: error });
   },
+  setRoutePreview: (rota) => {
+    set({
+      routePreview:
+        rota?.waypoints.map((waypoint) => [waypoint.latitude, waypoint.longitude]) ??
+        [],
+    });
+  },
+  setSelectedDroneId: (droneId) => {
+    set({ selectedDroneId: droneId });
+  },
   reset: () => {
     set({
       currentFrame: null,
@@ -63,6 +80,8 @@ export const useTelemetryStore = create<StoreState>((set) => ({
       isReplaying: false,
       streamConnected: false,
       streamError: null,
+      routePreview: [],
+      selectedDroneId: "",
     });
   },
 }));

@@ -4,7 +4,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { ApiError } from "@/api/client";
+import { listDrones, atualizarStatusDrone } from "@/api/drones";
 import { cancelarPedido, entregarPedido, getPedido, getPedidoAtivo } from "@/api/pedidos";
+import { calcularRotas, getRota } from "@/api/rotas";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatEta } from "@/lib/utils";
@@ -178,8 +180,14 @@ export function OrderMonitoringDashboard({
 }: OrderMonitoringDashboardProps): ReactElement {
   const queryClient = useQueryClient();
   const [replayVisible, setReplayVisible] = useState(false);
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+  const [isStartingFlight, setIsStartingFlight] = useState(false);
   const currentFrame = useTelemetryStore((state) => state.currentFrame);
   const historyLength = useTelemetryStore((state) => state.history.length);
+  const routePreview = useTelemetryStore((state) => state.routePreview);
+  const selectedDroneId = useTelemetryStore((state) => state.selectedDroneId);
+  const setRoutePreview = useTelemetryStore((state) => state.setRoutePreview);
+  const setSelectedDroneId = useTelemetryStore((state) => state.setSelectedDroneId);
   const resetTelemetry = useTelemetryStore((state) => state.reset);
   const pedidoQuery = useQuery({
     queryKey: ["pedido", pedidoId],
@@ -191,6 +199,29 @@ export function OrderMonitoringDashboard({
     queryFn: () => getPedidoAtivo(pedidoId),
     staleTime: QUERY_STALE_TIME,
     retry: false,
+    enabled:
+      pedidoQuery.data?.status === "calculado" ||
+      pedidoQuery.data?.status === "despachado" ||
+      pedidoQuery.data?.status === "em_voo",
+  });
+  const rotaQuery = useQuery({
+    queryKey: ["rota", pedidoQuery.data?.rota_id],
+    queryFn: () => getRota(pedidoQuery.data?.rota_id ?? 0),
+    staleTime: QUERY_STALE_TIME,
+    enabled:
+      pedidoQuery.data?.rota_id !== null &&
+      pedidoQuery.data?.rota_id !== undefined &&
+      (pedidoQuery.data?.status === "calculado" ||
+        pedidoQuery.data?.status === "despachado" ||
+        pedidoQuery.data?.status === "em_voo"),
+  });
+  const dronesQuery = useQuery({
+    queryKey: ["drones", "aguardando"],
+    queryFn: () => listDrones({ status: "aguardando" }),
+    staleTime: QUERY_STALE_TIME,
+    enabled:
+      pedidoQuery.data?.status === "pendente" ||
+      pedidoQuery.data?.status === "calculado",
   });
   const snapshot = useMemo(() => {
     return buildMonitoringSnapshot(
@@ -198,7 +229,32 @@ export function OrderMonitoringDashboard({
       pedidoQuery.data ?? null,
     );
   }, [pedidoAtivoQuery.data, pedidoQuery.data]);
-  const orderStream = useOrderStream(snapshot?.droneId ?? "");
+  const routePoints = useMemo(() => {
+    if (snapshot !== null && snapshot.routePoints.length > 0) {
+      return snapshot.routePoints;
+    }
+
+    if (rotaQuery.data !== undefined) {
+      return rotaQuery.data.waypoints.map((waypoint) => [
+        waypoint.latitude,
+        waypoint.longitude,
+      ] as [number, number]);
+    }
+
+    return routePreview;
+  }, [routePreview, rotaQuery.data, snapshot]);
+  const activeDroneId = useMemo(() => {
+    if (snapshot?.droneId && snapshot.status === "em_voo") {
+      return snapshot.droneId;
+    }
+
+    if (pedidoQuery.data?.status === "em_voo") {
+      return selectedDroneId;
+    }
+
+    return "";
+  }, [pedidoQuery.data?.status, selectedDroneId, snapshot]);
+  const orderStream = useOrderStream(activeDroneId);
   const progressPct = useMemo(() => {
     if (snapshot === null) {
       return null;
@@ -217,12 +273,37 @@ export function OrderMonitoringDashboard({
             ] as [number, number])
           : null;
 
-    return getRouteProgress(snapshot.routePoints, currentPosition);
-  }, [currentFrame, snapshot]);
+    return getRouteProgress(routePoints, currentPosition);
+  }, [currentFrame, routePoints, snapshot]);
+  const droneOptions = useMemo(() => {
+    return (dronesQuery.data?.drones ?? []).map((drone) => ({
+      value: drone.id,
+      label: `${drone.id} · bateria ${Math.round(drone.bateria_pct * 100)}%`,
+    }));
+  }, [dronesQuery.data?.drones]);
+  const canStartFlight =
+    pedidoQuery.data?.status === "calculado" &&
+    selectedDroneId.trim().length > 0;
 
   useEffect(() => {
     resetTelemetry();
   }, [pedidoId, resetTelemetry]);
+
+  useEffect(() => {
+    if (rotaQuery.data === undefined) {
+      return;
+    }
+
+    setRoutePreview(rotaQuery.data);
+  }, [rotaQuery.data, setRoutePreview]);
+
+  useEffect(() => {
+    if (snapshot?.droneId === undefined || snapshot.droneId.length === 0) {
+      return;
+    }
+
+    setSelectedDroneId(snapshot.droneId);
+  }, [setSelectedDroneId, snapshot?.droneId]);
 
   useEffect(() => {
     if (!pedidoAtivoQuery.isError) {
@@ -255,8 +336,66 @@ export function OrderMonitoringDashboard({
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["pedido", pedidoId] }),
       queryClient.invalidateQueries({ queryKey: ["pedido-ativo", pedidoId] }),
+      queryClient.invalidateQueries({ queryKey: ["rota"] }),
+      queryClient.invalidateQueries({ queryKey: ["drones"] }),
       queryClient.invalidateQueries({ queryKey: ["monitoring-pedidos"] }),
     ]);
+  }
+
+  async function handleCalcularRota(): Promise<void> {
+    if (selectedDroneId.trim().length === 0) {
+      toast.error("Selecione um drone disponivel para calcular a rota.");
+      return;
+    }
+
+    try {
+      setIsCalculatingRoute(true);
+      const response = await calcularRotas({
+        drone_id: selectedDroneId,
+        pedido_ids: [pedidoId],
+      });
+      const rotaCalculada = response.rotas[0] ?? null;
+
+      setRoutePreview(rotaCalculada);
+      await refreshQueries();
+      toast.success("Rota calculada com sucesso.");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsCalculatingRoute(false);
+    }
+  }
+
+  async function handleIniciarVoo(): Promise<void> {
+    if (selectedDroneId.trim().length === 0) {
+      toast.error("Selecione um drone para iniciar o voo.");
+      return;
+    }
+
+    try {
+      setIsStartingFlight(true);
+      await atualizarStatusDrone(selectedDroneId, "em_voo");
+      await refreshQueries();
+
+      const pedidoAtualizado = await queryClient.fetchQuery({
+        queryKey: ["pedido", pedidoId],
+        queryFn: () => getPedido(pedidoId),
+        staleTime: 0,
+      });
+
+      if (pedidoAtualizado.status !== "em_voo") {
+        toast.error(
+          "O contrato atual nao expoe um endpoint explicito de despacho. O drone foi marcado como em_voo, mas o pedido nao mudou de status.",
+        );
+        return;
+      }
+
+      toast.success("Voo iniciado com sucesso.");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsStartingFlight(false);
+    }
   }
 
   async function handleCancelar(): Promise<void> {
@@ -298,7 +437,7 @@ export function OrderMonitoringDashboard({
     <section className={DASHBOARD_CLASS_NAME}>
       <div className={MAP_PANEL_CLASS_NAME}>
         <MapCanvas
-          routePoints={snapshot.routePoints}
+          routePoints={routePoints}
           destination={snapshot.destination}
           currentFrame={currentFrame}
           positionSnapshot={snapshot.positionSnapshot}
@@ -323,9 +462,17 @@ export function OrderMonitoringDashboard({
           pedidoId={snapshot.pedidoId}
           replayEnabled={historyLength > 0}
           replayVisible={replayVisible}
+          selectedDroneId={selectedDroneId}
+          droneOptions={droneOptions}
+          isCalculatingRoute={isCalculatingRoute}
+          isStartingFlight={isStartingFlight}
+          canStartFlight={canStartFlight}
           onCancelar={handleCancelar}
           onEntregar={handleEntregar}
           onToggleReplay={() => setReplayVisible((currentValue) => !currentValue)}
+          onSelectedDroneChange={setSelectedDroneId}
+          onCalcularRota={handleCalcularRota}
+          onIniciarVoo={handleIniciarVoo}
         />
         {replayVisible ? <ReplayTimeline /> : null}
       </aside>

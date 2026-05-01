@@ -191,10 +191,11 @@ export function ReplayTimeline(): ReactElement {
   useEffect(() => {
     const nextIndex = Math.min(currentIndexRef.current, getSliderMax(history));
 
-    stopReplay();
+    clearReplayInterval();
+    setReplaying(false);
     currentIndexRef.current = nextIndex;
     setSliderValue(nextIndex);
-  }, [history]);
+  }, [history, setReplaying]);
 
   useEffect(() => {
     return () => {
