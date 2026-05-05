@@ -6,24 +6,43 @@ import type {
   WSTelemetriaPayload,
 } from "../../../types/api";
 
+interface DroneStreamState {
+  connected: boolean;
+  error: string | null;
+}
+
+type TelemetryFrameMap = Record<string, TelemetriaResponse | undefined>;
+type TelemetryHistoryMap = Record<string, TelemetriaResponse[] | undefined>;
+type DroneStreamStateMap = Record<string, DroneStreamState | undefined>;
+
 export interface StoreState {
-  currentFrame: TelemetriaResponse | null;
-  history: TelemetriaResponse[];
+  framesByDroneId: TelemetryFrameMap;
+  historyByDroneId: TelemetryHistoryMap;
+  streamStateByDroneId: DroneStreamStateMap;
   isReplaying: boolean;
-  streamConnected: boolean;
-  streamError: string | null;
   routePreview: [number, number][];
   selectedDroneId: string;
-  setFrame: (frame: TelemetriaResponse) => void;
-  appendHistory: (frame: TelemetriaResponse) => void;
+  getFrame: (droneId: string) => TelemetriaResponse | null;
+  getHistory: (droneId: string) => TelemetriaResponse[];
+  getStreamState: (droneId: string) => DroneStreamState;
+  setFrame: (droneId: string, frame: TelemetriaResponse) => void;
+  appendHistory: (droneId: string, frame: TelemetriaResponse) => void;
   setReplaying: (value: boolean) => void;
-  setStreamState: (connected: boolean, error: string | null) => void;
+  setStreamState: (
+    droneId: string,
+    connected: boolean,
+    error: string | null,
+  ) => void;
   setRoutePreview: (rota: RotaResponse | null) => void;
   setSelectedDroneId: (droneId: string) => void;
   reset: () => void;
 }
 
-const INITIAL_HISTORY: WSTelemetriaPayload[] = [];
+const EMPTY_HISTORY: WSTelemetriaPayload[] = [];
+const DISCONNECTED_STREAM_STATE: DroneStreamState = {
+  connected: false,
+  error: null,
+};
 
 function isSameFrame(
   currentFrame: TelemetriaResponse,
@@ -35,33 +54,98 @@ function isSameFrame(
   );
 }
 
-export const useTelemetryStore = create<StoreState>((set) => ({
-  currentFrame: null,
-  history: INITIAL_HISTORY,
+function getHistoryByDroneId(
+  historyByDroneId: TelemetryHistoryMap,
+  droneId: string,
+): TelemetriaResponse[] {
+  return historyByDroneId[droneId] ?? EMPTY_HISTORY;
+}
+
+function getStreamStateByDroneId(
+  streamStateByDroneId: DroneStreamStateMap,
+  droneId: string,
+): DroneStreamState {
+  return streamStateByDroneId[droneId] ?? DISCONNECTED_STREAM_STATE;
+}
+
+export const useTelemetryStore = create<StoreState>((set, get) => ({
+  framesByDroneId: {},
+  historyByDroneId: {},
+  streamStateByDroneId: {},
   isReplaying: false,
-  streamConnected: false,
-  streamError: null,
   routePreview: [],
   selectedDroneId: "",
-  setFrame: (frame) => {
-    set({ currentFrame: frame });
+  getFrame: (droneId) => {
+    if (droneId.length === 0) {
+      return null;
+    }
+
+    return get().framesByDroneId[droneId] ?? null;
   },
-  appendHistory: (frame) => {
+  getHistory: (droneId) => {
+    if (droneId.length === 0) {
+      return EMPTY_HISTORY;
+    }
+
+    return getHistoryByDroneId(get().historyByDroneId, droneId);
+  },
+  getStreamState: (droneId) => {
+    if (droneId.length === 0) {
+      return DISCONNECTED_STREAM_STATE;
+    }
+
+    return getStreamStateByDroneId(get().streamStateByDroneId, droneId);
+  },
+  setFrame: (droneId, frame) => {
+    if (droneId.length === 0) {
+      return;
+    }
+
+    set((state) => ({
+      framesByDroneId: {
+        ...state.framesByDroneId,
+        [droneId]: frame,
+      },
+    }));
+  },
+  appendHistory: (droneId, frame) => {
+    if (droneId.length === 0) {
+      return;
+    }
+
     set((state) => {
-      const lastFrame = state.history[state.history.length - 1];
+      const currentHistory = getHistoryByDroneId(state.historyByDroneId, droneId);
+      const lastFrame = currentHistory[currentHistory.length - 1];
 
       if (lastFrame !== undefined && isSameFrame(lastFrame, frame)) {
         return state;
       }
 
-      return { history: [...state.history, frame] };
+      return {
+        historyByDroneId: {
+          ...state.historyByDroneId,
+          [droneId]: [...currentHistory, frame],
+        },
+      };
     });
   },
   setReplaying: (value) => {
     set({ isReplaying: value });
   },
-  setStreamState: (connected, error) => {
-    set({ streamConnected: connected, streamError: error });
+  setStreamState: (droneId, connected, error) => {
+    if (droneId.length === 0) {
+      return;
+    }
+
+    set((state) => ({
+      streamStateByDroneId: {
+        ...state.streamStateByDroneId,
+        [droneId]: {
+          connected,
+          error,
+        },
+      },
+    }));
   },
   setRoutePreview: (rota) => {
     set({
@@ -75,11 +159,10 @@ export const useTelemetryStore = create<StoreState>((set) => ({
   },
   reset: () => {
     set({
-      currentFrame: null,
-      history: [],
+      framesByDroneId: {},
+      historyByDroneId: {},
+      streamStateByDroneId: {},
       isReplaying: false,
-      streamConnected: false,
-      streamError: null,
       routePreview: [],
       selectedDroneId: "",
     });

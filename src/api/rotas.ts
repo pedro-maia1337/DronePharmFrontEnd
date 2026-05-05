@@ -22,3 +22,9 @@ export function calcularRotas(
 export function getRota(rotaId: number): Promise<RotaResponse> {
   return apiFetch<RotaResponse>(`${ROTAS_BASE_PATH}/${rotaId}`);
 }
+
+export function despacharRota(rotaId: number): Promise<void> {
+  return apiFetch<void>(`${ROTAS_BASE_PATH}/${rotaId}/despachar`, {
+    method: "POST",
+  });
+}

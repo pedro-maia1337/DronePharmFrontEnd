@@ -5,6 +5,7 @@ import { AlertTriangle } from "lucide-react";
 import { formatEta } from "@/lib/utils";
 import type { PosicaoAtualResponse, TelemetriaResponse } from "@/types/api";
 
+import type { DroneMonitoramento } from "../monitoringUtils";
 import { useTelemetryStore } from "../store/useTelemetryStore";
 
 const BATTERY_ALERT_THRESHOLD = 0.2;
@@ -25,9 +26,11 @@ const UNIT_CLASS_NAME =
   "ml-1 font-sans text-xs text-[var(--text-muted)] not-italic";
 
 interface TelemetryGridProps {
+  monitoramento: DroneMonitoramento | null;
   etaSegundos: number | null;
   progressPct: number | null;
   connected: boolean;
+  signalLost: boolean;
   positionSnapshot: PosicaoAtualResponse | null;
 }
 
@@ -47,7 +50,15 @@ function formatPercent(value: number): string {
   return formatNumber(value * 100);
 }
 
-function getSignalValue(connected: boolean, historyLength: number): string {
+function getSignalValue(
+  connected: boolean,
+  historyLength: number,
+  signalLost: boolean,
+): string {
+  if (signalLost) {
+    return "Perda de Sinal";
+  }
+
   if (connected) {
     return "Ao vivo";
   }
@@ -88,6 +99,14 @@ function getBatteryValue(currentFrame: TelemetriaResponse | null): string {
   return formatPercent(currentFrame.bateria_pct);
 }
 
+function getDirectionValue(monitoramento: DroneMonitoramento | null): string {
+  if (monitoramento === null) {
+    return EMPTY_VALUE;
+  }
+
+  return formatNumber(monitoramento.vetor.direcao, 0);
+}
+
 function getEtaValue(etaSegundos: number | null): string {
   if (etaSegundos === null) {
     return EMPTY_VALUE;
@@ -102,6 +121,14 @@ function getProgressValue(progressPct: number | null): string {
   }
 
   return String(progressPct);
+}
+
+function getMissionValue(monitoramento: DroneMonitoramento | null): string {
+  if (monitoramento === null) {
+    return EMPTY_VALUE;
+  }
+
+  return monitoramento.status_missao;
 }
 
 function getCardClassName(card: MetricCard): string {
@@ -138,10 +165,12 @@ function renderUnit(unit?: string): ReactElement | null {
 }
 
 function buildMetricCards(
+  monitoramento: DroneMonitoramento | null,
   currentFrame: TelemetriaResponse | null,
   positionSnapshot: PosicaoAtualResponse | null,
   connected: boolean,
   historyLength: number,
+  signalLost: boolean,
   etaSegundos: number | null,
   progressPct: number | null,
 ): MetricCard[] {
@@ -177,7 +206,8 @@ function buildMetricCards(
     {
       key: "sinal",
       label: "Sinal",
-      value: getSignalValue(connected, historyLength),
+      value: getSignalValue(connected, historyLength, signalLost),
+      variant: signalLost ? "alert" : "default",
     },
     {
       key: "progresso",
@@ -185,22 +215,40 @@ function buildMetricCards(
       value: getProgressValue(progressPct),
       unit: "%",
     },
+    {
+      key: "direcao",
+      label: "Direcao",
+      value: getDirectionValue(monitoramento),
+      unit: "°",
+    },
+    {
+      key: "missao",
+      label: "Missao",
+      value: getMissionValue(monitoramento),
+    },
   ];
 }
 
 export function TelemetryGrid({
+  monitoramento,
   etaSegundos,
   progressPct,
   connected,
+  signalLost,
   positionSnapshot,
 }: TelemetryGridProps): ReactElement {
-  const currentFrame = useTelemetryStore((state) => state.currentFrame);
-  const historyLength = useTelemetryStore((state) => state.history.length);
+  const selectedDroneId = useTelemetryStore((state) => state.selectedDroneId);
+  const currentFrame = useTelemetryStore((state) => state.getFrame(selectedDroneId));
+  const historyLength = useTelemetryStore(
+    (state) => state.getHistory(selectedDroneId).length,
+  );
   const cards = buildMetricCards(
+    monitoramento,
     currentFrame,
     positionSnapshot,
     connected,
     historyLength,
+    signalLost,
     etaSegundos,
     progressPct,
   );

@@ -83,7 +83,8 @@ function buildInterpolatedFrame(
 }
 
 export function ReplayTimeline(): ReactElement {
-  const history = useTelemetryStore((state) => state.history);
+  const selectedDroneId = useTelemetryStore((state) => state.selectedDroneId);
+  const history = useTelemetryStore((state) => state.getHistory(selectedDroneId));
   const isReplaying = useTelemetryStore((state) => state.isReplaying);
   const setReplaying = useTelemetryStore((state) => state.setReplaying);
   const setFrame = useTelemetryStore((state) => state.setFrame);
@@ -111,7 +112,7 @@ export function ReplayTimeline(): ReactElement {
 
     currentIndexRef.current = index;
     setSliderValue(index);
-    setFrame(nextFrame);
+    setFrame(selectedDroneId, nextFrame);
   }
 
   function stopReplay(): void {
@@ -149,7 +150,10 @@ export function ReplayTimeline(): ReactElement {
 
     currentIndexRef.current = segmentIndex;
     setSliderValue(segmentIndex);
-    setFrame(buildInterpolatedFrame(currentFrame, nextFrame, replayTimestamp));
+    setFrame(
+      selectedDroneId,
+      buildInterpolatedFrame(currentFrame, nextFrame, replayTimestamp),
+    );
   }
 
   function startReplay(): void {

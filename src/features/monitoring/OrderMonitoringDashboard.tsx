@@ -4,9 +4,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { ApiError } from "@/api/client";
-import { listDrones, atualizarStatusDrone } from "@/api/drones";
+import { listDrones } from "@/api/drones";
 import { cancelarPedido, entregarPedido, getPedido, getPedidoAtivo } from "@/api/pedidos";
-import { calcularRotas, getRota } from "@/api/rotas";
+import { calcularRotas, despacharRota, getRota } from "@/api/rotas";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatEta } from "@/lib/utils";
@@ -16,15 +16,19 @@ import { MapCanvas } from "./components/MapCanvas";
 import { ReplayTimeline } from "./components/ReplayTimeline";
 import { StatusControl } from "./components/StatusControl";
 import { TelemetryGrid } from "./components/TelemetryGrid";
-import { useOrderStream } from "./hooks/useOrderStream";
+import { useDroneTracking } from "./hooks/useDroneTracking";
 import {
+  buildDroneMonitoramento,
   buildMonitoringSnapshot,
+  getEffectiveEtaSegundos,
   getMonitoringBadgeClassName,
   getRouteProgress,
+  isSignalLost,
 } from "./monitoringUtils";
 import { useTelemetryStore } from "./store/useTelemetryStore";
 
 const QUERY_STALE_TIME = 10_000;
+const ACTIVE_MONITORING_REFETCH_MS = 5_000;
 const DASHBOARD_CLASS_NAME = "flex h-[calc(100dvh-56px)] overflow-hidden";
 const MAP_PANEL_CLASS_NAME = "w-[70%] shrink-0 p-5";
 const SIDEBAR_CLASS_NAME =
@@ -182,8 +186,7 @@ export function OrderMonitoringDashboard({
   const [replayVisible, setReplayVisible] = useState(false);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
   const [isStartingFlight, setIsStartingFlight] = useState(false);
-  const currentFrame = useTelemetryStore((state) => state.currentFrame);
-  const historyLength = useTelemetryStore((state) => state.history.length);
+  const [heartbeatNow, setHeartbeatNow] = useState(() => Date.now());
   const routePreview = useTelemetryStore((state) => state.routePreview);
   const selectedDroneId = useTelemetryStore((state) => state.selectedDroneId);
   const setRoutePreview = useTelemetryStore((state) => state.setRoutePreview);
@@ -193,12 +196,24 @@ export function OrderMonitoringDashboard({
     queryKey: ["pedido", pedidoId],
     queryFn: () => getPedido(pedidoId),
     staleTime: QUERY_STALE_TIME,
+    refetchInterval: (query) => {
+      const currentStatus = query.state.data?.status;
+
+      return currentStatus === "despachado" || currentStatus === "em_voo"
+        ? ACTIVE_MONITORING_REFETCH_MS
+        : false;
+    },
   });
   const pedidoAtivoQuery = useQuery({
     queryKey: ["pedido-ativo", pedidoId],
     queryFn: () => getPedidoAtivo(pedidoId),
     staleTime: QUERY_STALE_TIME,
     retry: false,
+    refetchInterval:
+      pedidoQuery.data?.status === "despachado" ||
+      pedidoQuery.data?.status === "em_voo"
+        ? ACTIVE_MONITORING_REFETCH_MS
+        : false,
     enabled:
       pedidoQuery.data?.status === "calculado" ||
       pedidoQuery.data?.status === "despachado" ||
@@ -244,37 +259,83 @@ export function OrderMonitoringDashboard({
     return routePreview;
   }, [routePreview, rotaQuery.data, snapshot]);
   const activeDroneId = useMemo(() => {
-    if (snapshot?.droneId && snapshot.status === "em_voo") {
+    if (snapshot?.droneId) {
       return snapshot.droneId;
     }
 
-    if (pedidoQuery.data?.status === "em_voo") {
+    if (
+      (pedidoQuery.data?.status === "despachado" ||
+        pedidoQuery.data?.status === "em_voo") &&
+      rotaQuery.data?.drone_id
+    ) {
+      return rotaQuery.data.drone_id;
+    }
+
+    if (
+      pedidoQuery.data?.status === "despachado" ||
+      pedidoQuery.data?.status === "em_voo"
+    ) {
       return selectedDroneId;
     }
 
     return "";
-  }, [pedidoQuery.data?.status, selectedDroneId, snapshot]);
-  const orderStream = useOrderStream(activeDroneId);
+  }, [pedidoQuery.data?.status, rotaQuery.data?.drone_id, selectedDroneId, snapshot]);
+  const currentFrame = useTelemetryStore((state) => state.getFrame(activeDroneId));
+  const historyLength = useTelemetryStore(
+    (state) => state.getHistory(activeDroneId).length,
+  );
+  const orderStream = useDroneTracking(activeDroneId);
+  const monitoramento = useMemo(() => {
+    return buildDroneMonitoramento(snapshot, currentFrame);
+  }, [currentFrame, snapshot]);
+  const currentPosition = useMemo(() => {
+    if (currentFrame !== null) {
+      return [currentFrame.latitude, currentFrame.longitude] as [number, number];
+    }
+
+    if (
+      snapshot?.positionSnapshot?.latitude !== null &&
+      snapshot?.positionSnapshot?.latitude !== undefined &&
+      snapshot.positionSnapshot.longitude !== null &&
+      snapshot.positionSnapshot.longitude !== undefined
+    ) {
+      return [
+        snapshot.positionSnapshot.latitude,
+        snapshot.positionSnapshot.longitude,
+      ] as [number, number];
+    }
+
+    return null;
+  }, [currentFrame, snapshot]);
+  const effectiveEtaSegundos = useMemo(() => {
+    return getEffectiveEtaSegundos(
+      snapshot?.etaSegundos ?? null,
+      routePoints,
+      currentPosition,
+      snapshot?.destination ?? null,
+      currentFrame?.velocidade_ms ?? null,
+    );
+  }, [
+    currentFrame?.velocidade_ms,
+    currentPosition,
+    routePoints,
+    snapshot?.destination,
+    snapshot?.etaSegundos,
+  ]);
+  const signalLost = useMemo(() => {
+    return isSignalLost(
+      currentFrame,
+      snapshot?.positionSnapshot ?? null,
+      heartbeatNow,
+    );
+  }, [currentFrame, heartbeatNow, snapshot?.positionSnapshot]);
   const progressPct = useMemo(() => {
     if (snapshot === null) {
       return null;
     }
 
-    const currentPosition =
-      currentFrame !== null
-        ? ([currentFrame.latitude, currentFrame.longitude] as [number, number])
-        : snapshot.positionSnapshot?.latitude !== null &&
-            snapshot.positionSnapshot?.latitude !== undefined &&
-            snapshot.positionSnapshot?.longitude !== null &&
-            snapshot.positionSnapshot?.longitude !== undefined
-          ? ([
-              snapshot.positionSnapshot.latitude,
-              snapshot.positionSnapshot.longitude,
-            ] as [number, number])
-          : null;
-
     return getRouteProgress(routePoints, currentPosition);
-  }, [currentFrame, routePoints, snapshot]);
+  }, [currentPosition, routePoints, snapshot]);
   const droneOptions = useMemo(() => {
     return (dronesQuery.data?.drones ?? []).map((drone) => ({
       value: drone.id,
@@ -283,11 +344,21 @@ export function OrderMonitoringDashboard({
   }, [dronesQuery.data?.drones]);
   const canStartFlight =
     pedidoQuery.data?.status === "calculado" &&
-    selectedDroneId.trim().length > 0;
+    pedidoQuery.data.rota_id !== null;
 
   useEffect(() => {
     resetTelemetry();
   }, [pedidoId, resetTelemetry]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setHeartbeatNow(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     if (rotaQuery.data === undefined) {
@@ -304,6 +375,14 @@ export function OrderMonitoringDashboard({
 
     setSelectedDroneId(snapshot.droneId);
   }, [setSelectedDroneId, snapshot?.droneId]);
+
+  useEffect(() => {
+    if (rotaQuery.data?.drone_id === undefined || rotaQuery.data.drone_id.length === 0) {
+      return;
+    }
+
+    setSelectedDroneId(rotaQuery.data.drone_id);
+  }, [rotaQuery.data?.drone_id, setSelectedDroneId]);
 
   useEffect(() => {
     if (!pedidoAtivoQuery.isError) {
@@ -367,29 +446,17 @@ export function OrderMonitoringDashboard({
   }
 
   async function handleIniciarVoo(): Promise<void> {
-    if (selectedDroneId.trim().length === 0) {
-      toast.error("Selecione um drone para iniciar o voo.");
+    const rotaId = pedidoQuery.data?.rota_id;
+
+    if (rotaId === null || rotaId === undefined) {
+      toast.error("Calcule uma rota antes de iniciar o voo.");
       return;
     }
 
     try {
       setIsStartingFlight(true);
-      await atualizarStatusDrone(selectedDroneId, "em_voo");
+      await despacharRota(rotaId);
       await refreshQueries();
-
-      const pedidoAtualizado = await queryClient.fetchQuery({
-        queryKey: ["pedido", pedidoId],
-        queryFn: () => getPedido(pedidoId),
-        staleTime: 0,
-      });
-
-      if (pedidoAtualizado.status !== "em_voo") {
-        toast.error(
-          "O contrato atual nao expoe um endpoint explicito de despacho. O drone foi marcado como em_voo, mas o pedido nao mudou de status.",
-        );
-        return;
-      }
-
       toast.success("Voo iniciado com sucesso.");
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -441,15 +508,19 @@ export function OrderMonitoringDashboard({
           destination={snapshot.destination}
           currentFrame={currentFrame}
           positionSnapshot={snapshot.positionSnapshot}
+          droneDirection={monitoramento?.vetor.direcao ?? null}
+          signalLost={signalLost}
         />
       </div>
 
       <aside className={SIDEBAR_CLASS_NAME}>
         {renderHeader(snapshot.pedidoId, snapshot.status)}
         <TelemetryGrid
-          etaSegundos={snapshot.etaSegundos}
+          monitoramento={monitoramento}
+          etaSegundos={effectiveEtaSegundos}
           progressPct={progressPct}
           connected={orderStream.connected}
+          signalLost={signalLost}
           positionSnapshot={snapshot.positionSnapshot}
         />
         {renderProgressSection(

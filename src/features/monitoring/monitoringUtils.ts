@@ -4,12 +4,15 @@ import type {
   PedidoResumoTrackingResponse,
   PedidoStatus,
   PosicaoAtualResponse,
+  TelemetriaResponse,
   WaypointResponse,
 } from "@/types/api";
 
 const PENDING_STATUSES: PedidoStatus[] = ["pendente", "calculado"];
 const EARTH_RADIUS_METERS = 6_371_000;
 const PERCENT_MULTIPLIER = 100;
+const MILLISECONDS_PER_SECOND = 1000;
+const HEARTBEAT_TIMEOUT_SECONDS = 10;
 
 export interface MonitoringSnapshot {
   pedidoId: number;
@@ -24,6 +27,28 @@ export interface MonitoringSnapshot {
   despachadoEm: string | null;
   criadoEm: string | null;
   droneId: string;
+}
+
+export interface Posicao {
+  lat: number;
+  lng: number;
+}
+
+export interface Vetor {
+  velocidade_ms: number;
+  direcao: number;
+}
+
+export type StatusMissao = "em_voo" | "aguardando" | "emergencia";
+
+export interface DroneMonitoramento {
+  drone_id: string;
+  pedido_id: number;
+  status_pedido: PedidoStatus;
+  posicao: Posicao;
+  vetor: Vetor;
+  status_missao: StatusMissao;
+  eta_segundos: number | null;
 }
 
 function toRadians(value: number): number {
@@ -97,6 +122,28 @@ function getPolylineDistance(points: [number, number][]): number {
   }
 
   return distance;
+}
+
+function getRemainingRouteDistanceMeters(
+  routePoints: [number, number][],
+  currentPosition: [number, number],
+): number | null {
+  if (routePoints.length < 2) {
+    return null;
+  }
+
+  const totalDistance = getPolylineDistance(routePoints);
+
+  if (totalDistance <= 0) {
+    return null;
+  }
+
+  const traveledDistance = getClosestDistanceAlongRoute(
+    routePoints,
+    currentPosition,
+  );
+
+  return Math.max(totalDistance - traveledDistance, 0);
 }
 
 function getClosestDistanceAlongRoute(
@@ -212,4 +259,114 @@ export function getRouteProgress(
   );
 
   return Math.round((traveledDistance / totalDistance) * PERCENT_MULTIPLIER);
+}
+
+export function getEffectiveEtaSegundos(
+  etaSegundos: number | null,
+  routePoints: [number, number][],
+  currentPosition: [number, number] | null,
+  destination: [number, number] | null,
+  velocidadeMs: number | null,
+): number | null {
+  if (etaSegundos !== null) {
+    return etaSegundos;
+  }
+
+  if (velocidadeMs === null || velocidadeMs <= 0 || currentPosition === null) {
+    return null;
+  }
+
+  const remainingRouteDistanceMeters = getRemainingRouteDistanceMeters(
+    routePoints,
+    currentPosition,
+  );
+
+  const distanceMeters =
+    remainingRouteDistanceMeters ??
+    (destination !== null
+      ? getHaversineDistance(currentPosition, destination)
+      : null);
+
+  if (distanceMeters === null) {
+    return null;
+  }
+
+  return Math.round(distanceMeters / velocidadeMs);
+}
+
+export function isSignalLost(
+  currentFrame: TelemetriaResponse | null,
+  positionSnapshot: PosicaoAtualResponse | null,
+  nowTimestamp: number,
+): boolean {
+  const referenceTimestamp =
+    currentFrame?.criado_em ?? positionSnapshot?.atualizado_em ?? null;
+
+  if (referenceTimestamp === null) {
+    return false;
+  }
+
+  const parsedTimestamp = Date.parse(referenceTimestamp);
+
+  if (Number.isNaN(parsedTimestamp)) {
+    return false;
+  }
+
+  return (
+    nowTimestamp - parsedTimestamp >
+    HEARTBEAT_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND
+  );
+}
+
+function getMissionStatus(
+  monitoringSnapshot: MonitoringSnapshot,
+  currentFrame: TelemetriaResponse | null,
+): StatusMissao {
+  if (monitoringSnapshot.status === "em_voo" || currentFrame?.status === "em_voo") {
+    return "em_voo";
+  }
+
+  if (currentFrame?.status === "emergencia") {
+    return "emergencia";
+  }
+
+  return "aguardando";
+}
+
+export function buildDroneMonitoramento(
+  monitoringSnapshot: MonitoringSnapshot | null,
+  currentFrame: TelemetriaResponse | null,
+): DroneMonitoramento | null {
+  if (monitoringSnapshot === null) {
+    return null;
+  }
+
+  const latitude =
+    currentFrame?.latitude ?? monitoringSnapshot.positionSnapshot?.latitude;
+  const longitude =
+    currentFrame?.longitude ?? monitoringSnapshot.positionSnapshot?.longitude;
+
+  if (latitude === null || latitude === undefined) {
+    return null;
+  }
+
+  if (longitude === null || longitude === undefined) {
+    return null;
+  }
+
+  return {
+    drone_id: monitoringSnapshot.droneId,
+    pedido_id: monitoringSnapshot.pedidoId,
+    status_pedido: monitoringSnapshot.status,
+    posicao: {
+      lat: latitude,
+      lng: longitude,
+    },
+    vetor: {
+      velocidade_ms: currentFrame?.velocidade_ms ?? 0,
+      direcao: currentFrame?.direcao_vento ?? 0,
+    },
+    status_missao: getMissionStatus(monitoringSnapshot, currentFrame),
+    eta_segundos: monitoringSnapshot.etaSegundos,
+  };
 }
