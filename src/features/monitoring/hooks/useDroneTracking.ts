@@ -48,33 +48,15 @@ function getReconnectDelay(attempt: number): number {
 }
 
 function getWebSocketOrigin(): string {
-  const configuredWebSocketUrl = import.meta.env.VITE_WS_URL?.trim();
-
-  if (configuredWebSocketUrl) {
-    return configuredWebSocketUrl.replace(/\/+$/, "");
-  }
-
-  const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
-
-  if (configuredApiUrl) {
-    const apiUrl = new URL(configuredApiUrl);
-    const protocol = apiUrl.protocol === "https:" ? "wss:" : "ws:";
-
-    return `${protocol}//${apiUrl.host}`;
-  }
-
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 
   return `${protocol}//${window.location.host}`;
 }
 
 function buildWebSocketUrl(droneId: string): string {
-  const token = import.meta.env.VITE_API_TOKEN?.trim();
+  const token = import.meta.env.VITE_API_TOKEN?.trim() ?? "";
   const url = new URL(`/ws/telemetria/${encodeURIComponent(droneId)}`, getWebSocketOrigin());
-
-  if (token) {
-    url.searchParams.set("token", token);
-  }
+  url.searchParams.set("token", token);
 
   return url.toString();
 }
@@ -195,11 +177,23 @@ export function useDroneTracking(droneId: string): DroneTrackingState {
           }
         };
 
-        socket.onerror = () => {
+        socket.onerror = (event) => {
+          console.error("WebSocket error", {
+            droneId,
+            url: buildWebSocketUrl(droneId),
+            event,
+          });
           setStreamState(droneId, false, "Erro de conexao no canal de telemetria.");
         };
 
         socket.onclose = (event) => {
+          console.warn("WebSocket closed", {
+            droneId,
+            code: event.code,
+            reason: event.reason,
+            wasClean: event.wasClean,
+          });
+
           if (cancelled || event.code === NORMAL_CLOSE_CODE) {
             cleanupSocket();
             setStreamState(droneId, false, null);
