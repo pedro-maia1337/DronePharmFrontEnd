@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+} from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -6,7 +12,7 @@ import { toast } from "sonner";
 import { ApiError } from "@/api/client";
 import { listDrones } from "@/api/drones";
 import { cancelarPedido, entregarPedido, getPedido, getPedidoAtivo } from "@/api/pedidos";
-import { calcularRotas, despacharRota, getRota } from "@/api/rotas";
+import { abortarRota, calcularRotas, despacharRota, getRota, simularRotaAgora } from "@/api/rotas";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatEta } from "@/lib/utils";
@@ -16,6 +22,7 @@ import { MapCanvas } from "./components/MapCanvas";
 import { ReplayTimeline } from "./components/ReplayTimeline";
 import { StatusControl } from "./components/StatusControl";
 import { TelemetryGrid } from "./components/TelemetryGrid";
+import { usePedidoStream } from "./hooks/usePedidoStream";
 import { useDroneTracking } from "./hooks/useDroneTracking";
 import {
   buildDroneMonitoramento,
@@ -29,6 +36,7 @@ import { useTelemetryStore } from "./store/useTelemetryStore";
 
 const QUERY_STALE_TIME = 10_000;
 const ACTIVE_MONITORING_REFETCH_MS = 5_000;
+const ACTIVE_MONITORING_REFETCH_WHILE_STREAMING_MS = 15_000;
 const DASHBOARD_CLASS_NAME = "flex h-[calc(100dvh-56px)] overflow-hidden";
 const MAP_PANEL_CLASS_NAME = "w-[70%] shrink-0 p-5";
 const SIDEBAR_CLASS_NAME =
@@ -41,6 +49,21 @@ const FULLSCREEN_STATE_CLASS_NAME =
   "flex h-[calc(100dvh-56px)] items-center justify-center bg-[var(--surface-base)] p-6";
 const ERROR_STATE_CARD_CLASS_NAME =
   "flex max-w-md flex-col gap-4 rounded-[var(--radius-lg)] border border-[var(--surface-border)] bg-[var(--surface-panel)] p-6 text-center";
+const COMPLETION_BANNER_CLASS_NAME =
+  "mb-3 animate-pulse rounded-[var(--radius-md)] border border-[rgba(16,185,129,0.35)] bg-[rgba(16,185,129,0.12)] px-4 py-3 text-sm font-medium text-[var(--status-success,#10b981)]";
+const COMPLETION_BANNER_DURATION_MS = 4_000;
+
+function isPedidoStatus(value: string | null | undefined): value is PedidoStatus {
+  return (
+    value === "pendente" ||
+    value === "calculado" ||
+    value === "despachado" ||
+    value === "em_voo" ||
+    value === "entregue" ||
+    value === "cancelado" ||
+    value === "falha"
+  );
+}
 
 interface OrderMonitoringDashboardProps {
   pedidoId: number;
@@ -186,9 +209,16 @@ export function OrderMonitoringDashboard({
   const [replayVisible, setReplayVisible] = useState(false);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
   const [isStartingFlight, setIsStartingFlight] = useState(false);
+  const [isSimulatingNow, setIsSimulatingNow] = useState(false);
+  const [isAbortingFlight, setIsAbortingFlight] = useState(false);
   const [heartbeatNow, setHeartbeatNow] = useState(() => Date.now());
+  const [statusOverride, setStatusOverride] = useState<PedidoStatus | null>(null);
+  const [completionBannerVisible, setCompletionBannerVisible] = useState(false);
   const routePreview = useTelemetryStore((state) => state.routePreview);
   const selectedDroneId = useTelemetryStore((state) => state.selectedDroneId);
+  const selectedDroneStream = useTelemetryStore((state) =>
+    state.getStreamState(state.selectedDroneId),
+  );
   const setRoutePreview = useTelemetryStore((state) => state.setRoutePreview);
   const setSelectedDroneId = useTelemetryStore((state) => state.setSelectedDroneId);
   const resetTelemetry = useTelemetryStore((state) => state.reset);
@@ -200,7 +230,9 @@ export function OrderMonitoringDashboard({
       const currentStatus = query.state.data?.status;
 
       return currentStatus === "despachado" || currentStatus === "em_voo"
-        ? ACTIVE_MONITORING_REFETCH_MS
+        ? selectedDroneStream.connected
+          ? ACTIVE_MONITORING_REFETCH_WHILE_STREAMING_MS
+          : ACTIVE_MONITORING_REFETCH_MS
         : false;
     },
   });
@@ -212,7 +244,9 @@ export function OrderMonitoringDashboard({
     refetchInterval:
       pedidoQuery.data?.status === "despachado" ||
       pedidoQuery.data?.status === "em_voo"
-        ? ACTIVE_MONITORING_REFETCH_MS
+        ? selectedDroneStream.connected
+          ? ACTIVE_MONITORING_REFETCH_WHILE_STREAMING_MS
+          : ACTIVE_MONITORING_REFETCH_MS
         : false,
     enabled:
       pedidoQuery.data?.status === "calculado" ||
@@ -244,9 +278,23 @@ export function OrderMonitoringDashboard({
       pedidoQuery.data ?? null,
     );
   }, [pedidoAtivoQuery.data, pedidoQuery.data]);
+  const effectiveSnapshot = useMemo(() => {
+    if (snapshot === null) {
+      return null;
+    }
+
+    if (statusOverride === null) {
+      return snapshot;
+    }
+
+    return {
+      ...snapshot,
+      status: statusOverride,
+    };
+  }, [snapshot, statusOverride]);
   const routePoints = useMemo(() => {
-    if (snapshot !== null && snapshot.routePoints.length > 0) {
-      return snapshot.routePoints;
+    if (effectiveSnapshot !== null && effectiveSnapshot.routePoints.length > 0) {
+      return effectiveSnapshot.routePoints;
     }
 
     if (rotaQuery.data !== undefined) {
@@ -257,10 +305,10 @@ export function OrderMonitoringDashboard({
     }
 
     return routePreview;
-  }, [routePreview, rotaQuery.data, snapshot]);
+  }, [effectiveSnapshot, routePreview, rotaQuery.data]);
   const activeDroneId = useMemo(() => {
-    if (snapshot?.droneId) {
-      return snapshot.droneId;
+    if (effectiveSnapshot?.droneId) {
+      return effectiveSnapshot.droneId;
     }
 
     if (
@@ -279,63 +327,66 @@ export function OrderMonitoringDashboard({
     }
 
     return "";
-  }, [pedidoQuery.data?.status, rotaQuery.data?.drone_id, selectedDroneId, snapshot]);
+  }, [effectiveSnapshot, pedidoQuery.data?.status, rotaQuery.data?.drone_id, selectedDroneId]);
   const currentFrame = useTelemetryStore((state) => state.getFrame(activeDroneId));
+  const deferredFrame = useDeferredValue(currentFrame);
   const historyLength = useTelemetryStore(
     (state) => state.getHistory(activeDroneId).length,
   );
   const orderStream = useDroneTracking(activeDroneId);
+  const pedidoStream = usePedidoStream(pedidoId > 0);
   const monitoramento = useMemo(() => {
-    return buildDroneMonitoramento(snapshot, currentFrame);
-  }, [currentFrame, snapshot]);
+    return buildDroneMonitoramento(effectiveSnapshot, currentFrame);
+  }, [currentFrame, effectiveSnapshot]);
   const currentPosition = useMemo(() => {
     if (currentFrame !== null) {
       return [currentFrame.latitude, currentFrame.longitude] as [number, number];
     }
 
     if (
-      snapshot?.positionSnapshot?.latitude !== null &&
-      snapshot?.positionSnapshot?.latitude !== undefined &&
-      snapshot.positionSnapshot.longitude !== null &&
-      snapshot.positionSnapshot.longitude !== undefined
+      effectiveSnapshot?.positionSnapshot?.latitude !== null &&
+      effectiveSnapshot?.positionSnapshot?.latitude !== undefined &&
+      effectiveSnapshot.positionSnapshot.longitude !== null &&
+      effectiveSnapshot.positionSnapshot.longitude !== undefined
     ) {
       return [
-        snapshot.positionSnapshot.latitude,
-        snapshot.positionSnapshot.longitude,
+        effectiveSnapshot.positionSnapshot.latitude,
+        effectiveSnapshot.positionSnapshot.longitude,
       ] as [number, number];
     }
 
     return null;
-  }, [currentFrame, snapshot]);
+  }, [currentFrame, effectiveSnapshot]);
   const effectiveEtaSegundos = useMemo(() => {
     return getEffectiveEtaSegundos(
-      snapshot?.etaSegundos ?? null,
+      currentFrame?.eta_segundos ?? effectiveSnapshot?.etaSegundos ?? null,
       routePoints,
       currentPosition,
-      snapshot?.destination ?? null,
+      effectiveSnapshot?.destination ?? null,
       currentFrame?.velocidade_ms ?? null,
     );
   }, [
+    currentFrame?.eta_segundos,
     currentFrame?.velocidade_ms,
     currentPosition,
+    effectiveSnapshot?.destination,
+    effectiveSnapshot?.etaSegundos,
     routePoints,
-    snapshot?.destination,
-    snapshot?.etaSegundos,
   ]);
   const signalLost = useMemo(() => {
     return isSignalLost(
       currentFrame,
-      snapshot?.positionSnapshot ?? null,
+      effectiveSnapshot?.positionSnapshot ?? null,
       heartbeatNow,
     );
-  }, [currentFrame, heartbeatNow, snapshot?.positionSnapshot]);
+  }, [currentFrame, effectiveSnapshot?.positionSnapshot, heartbeatNow]);
   const progressPct = useMemo(() => {
-    if (snapshot === null) {
+    if (effectiveSnapshot === null) {
       return null;
     }
 
     return getRouteProgress(routePoints, currentPosition);
-  }, [currentPosition, routePoints, snapshot]);
+  }, [currentPosition, effectiveSnapshot, routePoints]);
   const droneOptions = useMemo(() => {
     return (dronesQuery.data?.drones ?? []).map((drone) => ({
       value: drone.id,
@@ -343,11 +394,14 @@ export function OrderMonitoringDashboard({
     }));
   }, [dronesQuery.data?.drones]);
   const canStartFlight =
-    pedidoQuery.data?.status === "calculado" &&
+    effectiveSnapshot?.status === "calculado" &&
     pedidoQuery.data.rota_id !== null;
+  const activeRotaId = pedidoAtivoQuery.data?.rota_id ?? pedidoQuery.data?.rota_id ?? null;
 
   useEffect(() => {
     resetTelemetry();
+    setStatusOverride(null);
+    setCompletionBannerVisible(false);
   }, [pedidoId, resetTelemetry]);
 
   useEffect(() => {
@@ -369,12 +423,12 @@ export function OrderMonitoringDashboard({
   }, [rotaQuery.data, setRoutePreview]);
 
   useEffect(() => {
-    if (snapshot?.droneId === undefined || snapshot.droneId.length === 0) {
+    if (effectiveSnapshot?.droneId === undefined || effectiveSnapshot.droneId.length === 0) {
       return;
     }
 
-    setSelectedDroneId(snapshot.droneId);
-  }, [setSelectedDroneId, snapshot?.droneId]);
+    setSelectedDroneId(effectiveSnapshot.droneId);
+  }, [effectiveSnapshot?.droneId, setSelectedDroneId]);
 
   useEffect(() => {
     if (rotaQuery.data?.drone_id === undefined || rotaQuery.data.drone_id.length === 0) {
@@ -383,6 +437,63 @@ export function OrderMonitoringDashboard({
 
     setSelectedDroneId(rotaQuery.data.drone_id);
   }, [rotaQuery.data?.drone_id, setSelectedDroneId]);
+
+  useEffect(() => {
+    if (currentFrame?.status_missao !== "em_voo") {
+      return;
+    }
+
+    setStatusOverride((currentStatus) => {
+      if (currentStatus === "entregue" || currentStatus === "cancelado") {
+        return currentStatus;
+      }
+
+      return "em_voo";
+    });
+  }, [currentFrame?.status_missao]);
+
+  useEffect(() => {
+    const lastEvent = pedidoStream.lastEvent;
+    if (lastEvent === null || lastEvent.pedido_id !== pedidoId) {
+      return;
+    }
+
+    const nextStatus = isPedidoStatus(lastEvent.status_para)
+      ? lastEvent.status_para
+      : null;
+
+    if (nextStatus !== null) {
+      setStatusOverride(nextStatus);
+
+      queryClient.setQueryData(["pedido", pedidoId], (currentData: typeof pedidoQuery.data) =>
+        currentData ? { ...currentData, status: nextStatus } : currentData,
+      );
+      queryClient.setQueryData(
+        ["pedido-ativo", pedidoId],
+        (currentData: typeof pedidoAtivoQuery.data) =>
+          currentData ? { ...currentData, status: nextStatus } : currentData,
+      );
+    }
+
+    if (lastEvent.evento === "pedido_entregue" || nextStatus === "entregue") {
+      setCompletionBannerVisible(true);
+      toast.success("Missao concluida com sucesso.");
+      window.setTimeout(() => {
+        setCompletionBannerVisible(false);
+      }, COMPLETION_BANNER_DURATION_MS);
+      void refreshQueries();
+    }
+
+    if (nextStatus === "cancelado" || nextStatus === "falha" || nextStatus === "pendente") {
+      void refreshQueries();
+    }
+  }, [
+    pedidoId,
+    pedidoAtivoQuery.data,
+    pedidoQuery.data,
+    pedidoStream.lastEvent,
+    queryClient,
+  ]);
 
   useEffect(() => {
     if (!pedidoAtivoQuery.isError) {
@@ -410,6 +521,14 @@ export function OrderMonitoringDashboard({
 
     toast.error(orderStream.error);
   }, [orderStream.error]);
+
+  useEffect(() => {
+    if (pedidoStream.error === null) {
+      return;
+    }
+
+    toast.error(pedidoStream.error);
+  }, [pedidoStream.error]);
 
   async function refreshQueries(): Promise<void> {
     await Promise.all([
@@ -485,6 +604,46 @@ export function OrderMonitoringDashboard({
     }
   }
 
+  async function handleSimularAgora(): Promise<void> {
+    const rotaId = pedidoQuery.data?.rota_id;
+
+    if (rotaId === null || rotaId === undefined) {
+      toast.error("Calcule uma rota antes de iniciar a simulacao.");
+      return;
+    }
+
+    try {
+      setIsSimulatingNow(true);
+      await simularRotaAgora(rotaId);
+      setStatusOverride("em_voo");
+      await refreshQueries();
+      toast.success("Simulacao iniciada imediatamente.");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsSimulatingNow(false);
+    }
+  }
+
+  async function handleAbortarSimulacao(): Promise<void> {
+    if (activeRotaId === null || activeRotaId === undefined) {
+      toast.error("Nenhuma rota ativa encontrada para abortar.");
+      return;
+    }
+
+    try {
+      setIsAbortingFlight(true);
+      await abortarRota(activeRotaId);
+      setStatusOverride("pendente");
+      await refreshQueries();
+      toast.success("Simulacao abortada e drone liberado.");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsAbortingFlight(false);
+    }
+  }
+
   function handleRetry(): void {
     void Promise.all([pedidoQuery.refetch(), pedidoAtivoQuery.refetch()]);
   }
@@ -493,7 +652,7 @@ export function OrderMonitoringDashboard({
     return renderLoadingState();
   }
 
-  if (snapshot === null) {
+  if (effectiveSnapshot === null) {
     return renderErrorState(
       getErrorMessage(pedidoQuery.error ?? pedidoAtivoQuery.error),
       handleRetry,
@@ -505,41 +664,53 @@ export function OrderMonitoringDashboard({
       <div className={MAP_PANEL_CLASS_NAME}>
         <MapCanvas
           routePoints={routePoints}
-          destination={snapshot.destination}
+          destination={effectiveSnapshot.destination}
           currentFrame={currentFrame}
-          positionSnapshot={snapshot.positionSnapshot}
+          positionSnapshot={effectiveSnapshot.positionSnapshot}
           droneDirection={monitoramento?.vetor.direcao ?? null}
           signalLost={signalLost}
         />
       </div>
 
       <aside className={SIDEBAR_CLASS_NAME}>
-        {renderHeader(snapshot.pedidoId, snapshot.status)}
+        {completionBannerVisible ? (
+          <div className={COMPLETION_BANNER_CLASS_NAME}>
+            Missao encerrada. Drone liberado e pedido concluido.
+          </div>
+        ) : null}
+        {renderHeader(effectiveSnapshot.pedidoId, effectiveSnapshot.status)}
         <TelemetryGrid
           monitoramento={monitoramento}
           etaSegundos={effectiveEtaSegundos}
           progressPct={progressPct}
           connected={orderStream.connected}
           signalLost={signalLost}
-          positionSnapshot={snapshot.positionSnapshot}
+          positionSnapshot={effectiveSnapshot.positionSnapshot}
+          currentFrame={deferredFrame}
+          historyLength={historyLength}
         />
         {renderProgressSection(
           progressPct,
-          snapshot.tempoDecorridoSegundos,
-          snapshot.estimativaEntregaEm,
+          effectiveSnapshot.tempoDecorridoSegundos,
+          effectiveSnapshot.estimativaEntregaEm,
         )}
         <StatusControl
-          status={snapshot.status}
-          pedidoId={snapshot.pedidoId}
+          status={effectiveSnapshot.status}
+          pedidoId={effectiveSnapshot.pedidoId}
+          rotaId={activeRotaId}
           replayEnabled={historyLength > 0}
           replayVisible={replayVisible}
           selectedDroneId={selectedDroneId}
           droneOptions={droneOptions}
           isCalculatingRoute={isCalculatingRoute}
           isStartingFlight={isStartingFlight}
+          isSimulatingNow={isSimulatingNow}
+          isAbortingFlight={isAbortingFlight}
           canStartFlight={canStartFlight}
           onCancelar={handleCancelar}
           onEntregar={handleEntregar}
+          onAbortarSimulacao={handleAbortarSimulacao}
+          onSimularAgora={handleSimularAgora}
           onToggleReplay={() => setReplayVisible((currentValue) => !currentValue)}
           onSelectedDroneChange={setSelectedDroneId}
           onCalcularRota={handleCalcularRota}

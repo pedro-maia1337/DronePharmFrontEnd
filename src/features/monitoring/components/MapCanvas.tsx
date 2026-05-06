@@ -18,7 +18,7 @@ import {
 } from "react-leaflet";
 
 import { lerp } from "@/lib/utils";
-import type { PosicaoAtualResponse, TelemetriaResponse } from "@/types/api";
+import type { PosicaoAtualResponse, WSTelemetriaPayload } from "@/types/api";
 
 const MAP_TILE_URL =
   "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
@@ -33,7 +33,7 @@ const DESTINATION_RADIUS_METERS = 18;
 const FIT_BOUNDS_PADDING: [number, number] = [32, 32];
 const DRONE_OPACITY_LOST = 0.5;
 const DRONE_OPACITY_DEFAULT = 1;
-const DRONE_ANIMATION_DURATION_MS = 500;
+const DRONE_ANIMATION_DURATION_MS = 220;
 const MAP_WRAPPER_CLASS_NAME =
   "relative h-full min-h-[420px] w-full overflow-hidden rounded-[var(--radius-lg)] border border-[var(--surface-border)] bg-[#080c11]";
 const MAP_CLASS_NAME = "h-full w-full";
@@ -43,7 +43,7 @@ const MAP_LABEL_CLASS_NAME =
 interface MapCanvasProps {
   routePoints: [number, number][];
   destination: [number, number] | null;
-  currentFrame: TelemetriaResponse | null;
+  currentFrame: WSTelemetriaPayload | null;
   positionSnapshot: PosicaoAtualResponse | null;
   droneDirection: number | null;
   signalLost: boolean;
@@ -116,7 +116,7 @@ function getFallbackPosition(
 }
 
 function getDronePosition(
-  currentFrame: TelemetriaResponse | null,
+  currentFrame: WSTelemetriaPayload | null,
   positionSnapshot: PosicaoAtualResponse | null,
 ): [number, number] | null {
   if (currentFrame !== null) {
@@ -147,7 +147,7 @@ function getMapCenter(
 }
 
 function getMapLabel(
-  currentFrame: TelemetriaResponse | null,
+  currentFrame: WSTelemetriaPayload | null,
   positionSnapshot: PosicaoAtualResponse | null,
 ): string {
   const latitude = currentFrame?.latitude ?? positionSnapshot?.latitude ?? null;

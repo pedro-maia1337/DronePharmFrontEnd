@@ -47,15 +47,20 @@ interface DroneOption {
 interface StatusControlProps {
   status: PedidoStatus;
   pedidoId: number;
+  rotaId?: number | null;
   replayEnabled?: boolean;
   replayVisible?: boolean;
   selectedDroneId?: string;
   droneOptions?: DroneOption[];
   isCalculatingRoute?: boolean;
   isStartingFlight?: boolean;
+  isSimulatingNow?: boolean;
+  isAbortingFlight?: boolean;
   canStartFlight?: boolean;
   onCancelar: () => void;
   onEntregar: () => void;
+  onAbortarSimulacao?: () => void;
+  onSimularAgora?: () => void;
   onToggleReplay?: () => void;
   onSelectedDroneChange?: (droneId: string) => void;
   onCalcularRota?: () => void;
@@ -79,15 +84,20 @@ function renderDisabledClass(disabled: boolean, baseClassName: string): string {
 export function StatusControl({
   status,
   pedidoId,
+  rotaId = null,
   replayEnabled = false,
   replayVisible = false,
   selectedDroneId = "",
   droneOptions = [],
   isCalculatingRoute = false,
   isStartingFlight = false,
+  isSimulatingNow = false,
+  isAbortingFlight = false,
   canStartFlight = false,
   onCancelar,
   onEntregar,
+  onAbortarSimulacao = () => {},
+  onSimularAgora = () => {},
   onToggleReplay = () => {},
   onSelectedDroneChange = () => {},
   onCalcularRota = () => {},
@@ -99,6 +109,8 @@ export function StatusControl({
   const canCalculateRoute = isPedidoSelectable(status);
   const canShowDroneSelector = canCalculateRoute || status === "calculado";
   const canManualDeliver = status === "em_voo";
+  const canAbortSimulation =
+    rotaId !== null && rotaId !== undefined && (status === "despachado" || status === "em_voo");
   const replayDisabled = !replayEnabled;
 
   function handleDroneChange(event: ChangeEvent<HTMLSelectElement>): void {
@@ -164,14 +176,24 @@ export function StatusControl({
           ) : null}
 
           {status === "calculado" ? (
-            <Button
-              type="button"
-              className={renderDisabledClass(!canStartFlight, PRIMARY_BUTTON_CLASS_NAME)}
-              disabled={!canStartFlight || isStartingFlight}
-              onClick={onIniciarVoo}
-            >
-              {isStartingFlight ? "Iniciando..." : "Iniciar Voo"}
-            </Button>
+            <>
+              <Button
+                type="button"
+                className={renderDisabledClass(!canStartFlight, PRIMARY_BUTTON_CLASS_NAME)}
+                disabled={!canStartFlight || isStartingFlight}
+                onClick={onIniciarVoo}
+              >
+                {isStartingFlight ? "Iniciando..." : "Iniciar Voo"}
+              </Button>
+              <Button
+                type="button"
+                className={renderDisabledClass(!canStartFlight, PRIMARY_BUTTON_CLASS_NAME)}
+                disabled={!canStartFlight || isSimulatingNow}
+                onClick={onSimularAgora}
+              >
+                {isSimulatingNow ? "Simulando..." : "Simular Agora"}
+              </Button>
+            </>
           ) : null}
 
           <Button
@@ -181,6 +203,15 @@ export function StatusControl({
             onClick={onEntregar}
           >
             Confirmar Entrega Manual
+          </Button>
+
+          <Button
+            type="button"
+            className={renderDisabledClass(!canAbortSimulation, DANGER_BUTTON_CLASS_NAME)}
+            disabled={!canAbortSimulation || isAbortingFlight}
+            onClick={onAbortarSimulacao}
+          >
+            {isAbortingFlight ? "Abortando..." : "Abortar Simulacao"}
           </Button>
 
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

@@ -4,7 +4,7 @@ import type {
   PedidoResumoTrackingResponse,
   PedidoStatus,
   PosicaoAtualResponse,
-  TelemetriaResponse,
+  WSTelemetriaPayload,
   WaypointResponse,
 } from "@/types/api";
 
@@ -295,7 +295,7 @@ export function getEffectiveEtaSegundos(
 }
 
 export function isSignalLost(
-  currentFrame: TelemetriaResponse | null,
+  currentFrame: WSTelemetriaPayload | null,
   positionSnapshot: PosicaoAtualResponse | null,
   nowTimestamp: number,
 ): boolean {
@@ -320,9 +320,13 @@ export function isSignalLost(
 
 function getMissionStatus(
   monitoringSnapshot: MonitoringSnapshot,
-  currentFrame: TelemetriaResponse | null,
+  currentFrame: WSTelemetriaPayload | null,
 ): StatusMissao {
-  if (monitoringSnapshot.status === "em_voo" || currentFrame?.status === "em_voo") {
+  if (
+    monitoringSnapshot.status === "em_voo" ||
+    currentFrame?.status === "em_voo" ||
+    currentFrame?.status_missao === "em_voo"
+  ) {
     return "em_voo";
   }
 
@@ -335,7 +339,7 @@ function getMissionStatus(
 
 export function buildDroneMonitoramento(
   monitoringSnapshot: MonitoringSnapshot | null,
-  currentFrame: TelemetriaResponse | null,
+  currentFrame: WSTelemetriaPayload | null,
 ): DroneMonitoramento | null {
   if (monitoringSnapshot === null) {
     return null;
@@ -364,7 +368,7 @@ export function buildDroneMonitoramento(
     },
     vetor: {
       velocidade_ms: currentFrame?.velocidade_ms ?? 0,
-      direcao: currentFrame?.direcao_vento ?? 0,
+      direcao: currentFrame?.direcao ?? currentFrame?.direcao_vento ?? 0,
     },
     status_missao: getMissionStatus(monitoringSnapshot, currentFrame),
     eta_segundos: monitoringSnapshot.etaSegundos,

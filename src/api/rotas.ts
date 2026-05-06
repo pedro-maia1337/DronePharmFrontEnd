@@ -28,3 +28,19 @@ export function despacharRota(rotaId: number): Promise<void> {
     method: "POST",
   });
 }
+
+export function simularRotaAgora(rotaId: number): Promise<void> {
+  return apiFetch<void>(`${ROTAS_BASE_PATH}/${rotaId}/simular-agora`, {
+    method: "POST",
+  });
+}
+
+export function abortarRota(rotaId: number, motivo = "Abortada pelo operador"): Promise<void> {
+  return apiFetch<void>(`${ROTAS_BASE_PATH}/${rotaId}/abortar`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ motivo }),
+  });
+}

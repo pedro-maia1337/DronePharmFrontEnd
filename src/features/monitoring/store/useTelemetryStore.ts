@@ -2,7 +2,6 @@ import { create } from "zustand";
 
 import type {
   RotaResponse,
-  TelemetriaResponse,
   WSTelemetriaPayload,
 } from "../../../types/api";
 
@@ -11,8 +10,8 @@ interface DroneStreamState {
   error: string | null;
 }
 
-type TelemetryFrameMap = Record<string, TelemetriaResponse | undefined>;
-type TelemetryHistoryMap = Record<string, TelemetriaResponse[] | undefined>;
+type TelemetryFrameMap = Record<string, WSTelemetriaPayload | undefined>;
+type TelemetryHistoryMap = Record<string, WSTelemetriaPayload[] | undefined>;
 type DroneStreamStateMap = Record<string, DroneStreamState | undefined>;
 
 export interface StoreState {
@@ -22,11 +21,11 @@ export interface StoreState {
   isReplaying: boolean;
   routePreview: [number, number][];
   selectedDroneId: string;
-  getFrame: (droneId: string) => TelemetriaResponse | null;
-  getHistory: (droneId: string) => TelemetriaResponse[];
+  getFrame: (droneId: string) => WSTelemetriaPayload | null;
+  getHistory: (droneId: string) => WSTelemetriaPayload[];
   getStreamState: (droneId: string) => DroneStreamState;
-  setFrame: (droneId: string, frame: TelemetriaResponse) => void;
-  appendHistory: (droneId: string, frame: TelemetriaResponse) => void;
+  setFrame: (droneId: string, frame: WSTelemetriaPayload) => void;
+  appendHistory: (droneId: string, frame: WSTelemetriaPayload) => void;
   setReplaying: (value: boolean) => void;
   setStreamState: (
     droneId: string,
@@ -45,8 +44,8 @@ const DISCONNECTED_STREAM_STATE: DroneStreamState = {
 };
 
 function isSameFrame(
-  currentFrame: TelemetriaResponse,
-  nextFrame: TelemetriaResponse,
+  currentFrame: WSTelemetriaPayload,
+  nextFrame: WSTelemetriaPayload,
 ): boolean {
   return (
     currentFrame.id === nextFrame.id &&
@@ -57,7 +56,7 @@ function isSameFrame(
 function getHistoryByDroneId(
   historyByDroneId: TelemetryHistoryMap,
   droneId: string,
-): TelemetriaResponse[] {
+): WSTelemetriaPayload[] {
   return historyByDroneId[droneId] ?? EMPTY_HISTORY;
 }
 

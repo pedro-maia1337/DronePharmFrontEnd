@@ -1,39 +1,29 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
-import type { WSTelemetriaPayload } from "../../../types/api";
-import { useTelemetryStore } from "../store/useTelemetryStore";
+import type { WSPedidoPayload } from "@/types/api";
 
 const BASE_RETRY_DELAY_MS = 1000;
 const MAX_RETRY_DELAY_MS = 30_000;
 const MAX_RECONNECT_ATTEMPTS = 8;
 const NORMAL_CLOSE_CODE = 1000;
+const PING_INTERVAL_MS = 15_000;
 
-interface DroneTrackingState {
+interface PedidoStreamState {
   connected: boolean;
   error: string | null;
+  lastEvent: WSPedidoPayload | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isWSTelemetriaPayload(value: unknown): value is WSTelemetriaPayload {
-  if (!isRecord(value)) {
-    return false;
-  }
-
+function isWSPedidoPayload(value: unknown): value is WSPedidoPayload {
   return (
-    typeof value.id === "number" &&
-    typeof value.drone_id === "string" &&
-    typeof value.latitude === "number" &&
-    typeof value.longitude === "number" &&
-    typeof value.altitude_m === "number" &&
-    typeof value.velocidade_ms === "number" &&
-    typeof value.bateria_pct === "number" &&
-    typeof value.vento_ms === "number" &&
-    typeof value.direcao_vento === "number" &&
-    typeof value.status === "string" &&
-    typeof value.criado_em === "string"
+    isRecord(value) &&
+    value.tipo === "pedido" &&
+    typeof value.evento === "string" &&
+    typeof value.pedido_id === "number"
   );
 }
 
@@ -58,11 +48,13 @@ function getWebSocketOrigin(): string {
   return `${protocol}//${window.location.host}`;
 }
 
-function buildWebSocketUrl(droneId: string): string {
-  const token = import.meta.env.VITE_API_TOKEN?.trim() ?? "";
-  const url = new URL(`/ws/telemetria/${encodeURIComponent(droneId)}`, getWebSocketOrigin());
+function buildPedidosWebSocketUrl(): string {
+  const token =
+    import.meta.env.VITE_API_TOKEN?.trim() ||
+    import.meta.env.VITE_WS_TOKEN?.trim() ||
+    "";
+  const url = new URL("/ws/pedidos", getWebSocketOrigin());
   url.searchParams.set("token", token);
-
   return url.toString();
 }
 
@@ -74,24 +66,31 @@ function getCloseMessage(event: CloseEvent): string {
   return `Conexao encerrada (codigo ${event.code}).`;
 }
 
-export function useDroneTracking(droneId: string): DroneTrackingState {
-  const setFrame = useTelemetryStore((state) => state.setFrame);
-  const appendHistory = useTelemetryStore((state) => state.appendHistory);
-  const setStreamState = useTelemetryStore((state) => state.setStreamState);
-  const streamState = useTelemetryStore((state) => state.getStreamState(droneId));
+export function usePedidoStream(enabled: boolean): PedidoStreamState {
+  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastEvent, setLastEvent] = useState<WSPedidoPayload | null>(null);
 
   useEffect(() => {
-    if (!droneId) {
+    if (!enabled) {
+      setConnected(false);
+      setError(null);
       return;
     }
 
     let reconnectAttempts = 0;
     let reconnectTimerId: number | null = null;
     let connectTimerId: number | null = null;
+    let pingTimerId: number | null = null;
     let socket: WebSocket | null = null;
     let cancelled = false;
 
     const cleanupSocket = (): void => {
+      if (pingTimerId !== null) {
+        window.clearInterval(pingTimerId);
+        pingTimerId = null;
+      }
+
       if (socket === null) {
         return;
       }
@@ -120,21 +119,15 @@ export function useDroneTracking(droneId: string): DroneTrackingState {
       }
 
       if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-        setStreamState(
-          droneId,
-          false,
-          message ?? "Nao foi possivel reconectar ao stream de telemetria.",
-        );
+        setConnected(false);
+        setError(message ?? "Nao foi possivel reconectar ao stream de pedidos.");
         return;
       }
 
       const delay = getReconnectDelay(reconnectAttempts);
       reconnectAttempts += 1;
-      setStreamState(
-        droneId,
-        false,
-        message ?? `Tentando reconectar em ${Math.round(delay / 1000)}s.`,
-      );
+      setConnected(false);
+      setError(message ?? `Tentando reconectar em ${Math.round(delay / 1000)}s.`);
 
       reconnectTimerId = window.setTimeout(() => {
         connect();
@@ -150,85 +143,88 @@ export function useDroneTracking(droneId: string): DroneTrackingState {
       cleanupSocket();
 
       try {
-        socket = new WebSocket(buildWebSocketUrl(droneId));
+        socket = new WebSocket(buildPedidosWebSocketUrl());
 
         socket.onopen = () => {
           reconnectAttempts = 0;
-          setStreamState(droneId, true, null);
+          setConnected(true);
+          setError(null);
+          pingTimerId = window.setInterval(() => {
+            if (socket?.readyState === WebSocket.OPEN) {
+              socket.send("ping");
+            }
+          }, PING_INTERVAL_MS);
         };
 
         socket.onmessage = (event) => {
           try {
             const parsedPayload: unknown = JSON.parse(event.data);
 
-            if (!isWSTelemetriaPayload(parsedPayload)) {
-              console.warn("Payload de telemetria invalido recebido pelo WebSocket.", {
-                droneId,
-                payload: parsedPayload,
-              });
+            if (!isWSPedidoPayload(parsedPayload)) {
               return;
             }
 
-            setFrame(parsedPayload.drone_id, parsedPayload);
-            appendHistory(parsedPayload.drone_id, parsedPayload);
-            setStreamState(parsedPayload.drone_id, true, null);
+            setLastEvent(parsedPayload);
+            setConnected(true);
+            setError(null);
           } catch (caughtError) {
             const message =
               caughtError instanceof Error
                 ? caughtError.message
-                : "Falha desconhecida ao processar telemetria.";
-
-            scheduleReconnect(
-              `Falha ao processar mensagem do WebSocket: ${message}`,
-            );
+                : "Falha desconhecida ao processar evento de pedido.";
+            scheduleReconnect(`Falha ao processar stream de pedidos: ${message}`);
           }
         };
 
-        socket.onerror = (event) => {
-          console.error(`WebSocket error: Falha na conexao com o servidor de telemetria para o drone ${droneId}`);
-          setStreamState(droneId, false, "Erro de conexao no canal de telemetria.");
+        socket.onerror = () => {
+          setConnected(false);
+          setError("Erro de conexao no canal de pedidos.");
         };
 
         socket.onclose = (event) => {
-          console.warn("WebSocket closed", {
-            droneId,
-            code: event.code,
-            reason: event.reason,
-            wasClean: event.wasClean,
-          });
-
           if (cancelled || event.code === NORMAL_CLOSE_CODE) {
             cleanupSocket();
-            setStreamState(droneId, false, null);
+            setConnected(false);
+            setError(null);
             return;
           }
 
+          const extraHint =
+            event.code === 1006
+              ? " Verifique token e host do ws/pedidos."
+              : "";
           scheduleReconnect(getCloseMessage(event));
+          if (extraHint.length > 0) {
+            setError((currentError) =>
+              currentError === null ? `Canal de pedidos fechado inesperadamente.${extraHint}` : `${currentError}${extraHint}`,
+            );
+          }
         };
       } catch (caughtError) {
         const message =
           caughtError instanceof Error
             ? caughtError.message
-            : "Falha desconhecida ao abrir WebSocket.";
-
-        scheduleReconnect(`Nao foi possivel iniciar o stream: ${message}`);
+            : "Falha desconhecida ao abrir WebSocket de pedidos.";
+        scheduleReconnect(`Nao foi possivel iniciar o stream de pedidos: ${message}`);
       }
     };
 
-    // Evita erro de "WebSocket is closed before the connection is established"
-    // causado pela montagem e desmontagem imediata no React Strict Mode.
+    // Evita o fechamento prematuro do socket durante a montagem dupla do React Strict Mode.
     connectTimerId = window.setTimeout(() => {
       connect();
     }, 50);
 
     return () => {
       cancelled = true;
-      if (connectTimerId !== null) window.clearTimeout(connectTimerId);
+      if (connectTimerId !== null) {
+        window.clearTimeout(connectTimerId);
+      }
       clearReconnectTimer(reconnectTimerId);
       cleanupSocket();
-      setStreamState(droneId, false, null);
+      setConnected(false);
+      setError(null);
     };
-  }, [appendHistory, droneId, setFrame, setStreamState]);
+  }, [enabled]);
 
-  return streamState;
+  return { connected, error, lastEvent };
 }

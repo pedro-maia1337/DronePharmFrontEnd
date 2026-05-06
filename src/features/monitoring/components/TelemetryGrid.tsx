@@ -3,10 +3,9 @@ import type { ReactElement } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import { formatEta } from "@/lib/utils";
-import type { PosicaoAtualResponse, TelemetriaResponse } from "@/types/api";
+import type { PosicaoAtualResponse, WSTelemetriaPayload } from "@/types/api";
 
 import type { DroneMonitoramento } from "../monitoringUtils";
-import { useTelemetryStore } from "../store/useTelemetryStore";
 
 const BATTERY_ALERT_THRESHOLD = 0.2;
 const KMH_FACTOR = 3.6;
@@ -32,6 +31,8 @@ interface TelemetryGridProps {
   connected: boolean;
   signalLost: boolean;
   positionSnapshot: PosicaoAtualResponse | null;
+  currentFrame: WSTelemetriaPayload | null;
+  historyLength: number;
 }
 
 interface MetricCard {
@@ -71,7 +72,7 @@ function getSignalValue(
 }
 
 function getAltitudeValue(
-  currentFrame: TelemetriaResponse | null,
+  currentFrame: WSTelemetriaPayload | null,
   positionSnapshot: PosicaoAtualResponse | null,
 ): string {
   const altitude = currentFrame?.altitude_m ?? positionSnapshot?.altitude_m;
@@ -83,7 +84,7 @@ function getAltitudeValue(
   return formatNumber(altitude);
 }
 
-function getVelocityValue(currentFrame: TelemetriaResponse | null): string {
+function getVelocityValue(currentFrame: WSTelemetriaPayload | null): string {
   if (currentFrame === null) {
     return EMPTY_VALUE;
   }
@@ -91,7 +92,7 @@ function getVelocityValue(currentFrame: TelemetriaResponse | null): string {
   return formatNumber(currentFrame.velocidade_ms * KMH_FACTOR, 0);
 }
 
-function getBatteryValue(currentFrame: TelemetriaResponse | null): string {
+function getBatteryValue(currentFrame: WSTelemetriaPayload | null): string {
   if (currentFrame === null) {
     return EMPTY_VALUE;
   }
@@ -166,7 +167,7 @@ function renderUnit(unit?: string): ReactElement | null {
 
 function buildMetricCards(
   monitoramento: DroneMonitoramento | null,
-  currentFrame: TelemetriaResponse | null,
+  currentFrame: WSTelemetriaPayload | null,
   positionSnapshot: PosicaoAtualResponse | null,
   connected: boolean,
   historyLength: number,
@@ -236,12 +237,9 @@ export function TelemetryGrid({
   connected,
   signalLost,
   positionSnapshot,
+  currentFrame,
+  historyLength,
 }: TelemetryGridProps): ReactElement {
-  const selectedDroneId = useTelemetryStore((state) => state.selectedDroneId);
-  const currentFrame = useTelemetryStore((state) => state.getFrame(selectedDroneId));
-  const historyLength = useTelemetryStore(
-    (state) => state.getHistory(selectedDroneId).length,
-  );
   const cards = buildMetricCards(
     monitoramento,
     currentFrame,

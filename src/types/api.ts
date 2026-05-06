@@ -238,4 +238,21 @@ export interface TelemetriaResponse {
   criado_em: string;
 }
 
-export type WSTelemetriaPayload = TelemetriaResponse;
+export interface WSTelemetriaPayload extends TelemetriaResponse {
+  pedido_id?: number | null;
+  status_missao?: PedidoStatus | StatusDroneEnum | string | null;
+  eta_segundos?: number | null;
+  direcao?: number | null;
+  _ts?: string;
+}
+
+export interface WSPedidoPayload {
+  tipo: "pedido";
+  evento: string;
+  pedido_id: number;
+  status_de?: PedidoStatus | null;
+  status_para?: PedidoStatus | null;
+  drone_id?: string | null;
+  rota_id?: number | null;
+  timestamp?: string;
+}
