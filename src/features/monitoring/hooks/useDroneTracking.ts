@@ -82,6 +82,7 @@ export function useDroneTracking(droneId: string): DroneTrackingState {
 
     let reconnectAttempts = 0;
     let reconnectTimerId: number | null = null;
+    let connectTimerId: number | null = null;
     let socket: WebSocket | null = null;
     let cancelled = false;
 
@@ -178,11 +179,7 @@ export function useDroneTracking(droneId: string): DroneTrackingState {
         };
 
         socket.onerror = (event) => {
-          console.error("WebSocket error", {
-            droneId,
-            url: buildWebSocketUrl(droneId),
-            event,
-          });
+          console.error(`WebSocket error: Falha na conexao com o servidor de telemetria para o drone ${droneId}`);
           setStreamState(droneId, false, "Erro de conexao no canal de telemetria.");
         };
 
@@ -212,10 +209,15 @@ export function useDroneTracking(droneId: string): DroneTrackingState {
       }
     };
 
-    connect();
+    // Evita erro de "WebSocket is closed before the connection is established"
+    // causado pela montagem e desmontagem imediata no React Strict Mode.
+    connectTimerId = window.setTimeout(() => {
+      connect();
+    }, 50);
 
     return () => {
       cancelled = true;
+      if (connectTimerId !== null) window.clearTimeout(connectTimerId);
       clearReconnectTimer(reconnectTimerId);
       cleanupSocket();
       setStreamState(droneId, false, null);
