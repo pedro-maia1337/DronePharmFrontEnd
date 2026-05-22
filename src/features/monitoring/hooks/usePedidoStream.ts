@@ -12,6 +12,7 @@ interface PedidoStreamState {
   connected: boolean;
   error: string | null;
   lastEvent: WSPedidoPayload | null;
+  latestByPedidoId: Record<number, WSPedidoPayload | undefined>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -70,11 +71,16 @@ export function usePedidoStream(enabled: boolean): PedidoStreamState {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastEvent, setLastEvent] = useState<WSPedidoPayload | null>(null);
+  const [latestByPedidoId, setLatestByPedidoId] = useState<
+    Record<number, WSPedidoPayload | undefined>
+  >({});
 
   useEffect(() => {
     if (!enabled) {
       setConnected(false);
       setError(null);
+      setLastEvent(null);
+      setLatestByPedidoId({});
       return;
     }
 
@@ -165,6 +171,10 @@ export function usePedidoStream(enabled: boolean): PedidoStreamState {
             }
 
             setLastEvent(parsedPayload);
+            setLatestByPedidoId((currentValue) => ({
+              ...currentValue,
+              [parsedPayload.pedido_id]: parsedPayload,
+            }));
             setConnected(true);
             setError(null);
           } catch (caughtError) {
@@ -226,5 +236,5 @@ export function usePedidoStream(enabled: boolean): PedidoStreamState {
     };
   }, [enabled]);
 
-  return { connected, error, lastEvent };
+  return { connected, error, lastEvent, latestByPedidoId };
 }

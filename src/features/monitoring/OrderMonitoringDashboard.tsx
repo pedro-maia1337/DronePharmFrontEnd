@@ -6,11 +6,12 @@ import {
   type ReactElement,
 } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { ApiError } from "@/api/client";
 import { listDrones } from "@/api/drones";
+import { getMapaSnapshot } from "@/api/mapa";
 import { cancelarPedido, entregarPedido, getPedido, getPedidoAtivo } from "@/api/pedidos";
 import { abortarRota, calcularRotas, despacharRota, getRota, simularRotaAgora } from "@/api/rotas";
 import { Button } from "@/components/ui/button";
@@ -26,11 +27,13 @@ import { usePedidoStream } from "./hooks/usePedidoStream";
 import { useDroneTracking } from "./hooks/useDroneTracking";
 import {
   buildDroneMonitoramento,
+  buildMonitoringGeoJsonSnapshot,
   buildMonitoringSnapshot,
   getEffectiveEtaSegundos,
   getMonitoringBadgeClassName,
   getRouteProgress,
   isSignalLost,
+  routePointsFromWaypoints,
 } from "./monitoringUtils";
 import { useTelemetryStore } from "./store/useTelemetryStore";
 
@@ -52,6 +55,17 @@ const ERROR_STATE_CARD_CLASS_NAME =
 const COMPLETION_BANNER_CLASS_NAME =
   "mb-3 animate-pulse rounded-[var(--radius-md)] border border-[rgba(16,185,129,0.35)] bg-[rgba(16,185,129,0.12)] px-4 py-3 text-sm font-medium text-[var(--status-success,#10b981)]";
 const COMPLETION_BANNER_DURATION_MS = 4_000;
+const ROUTE_PEDIDO_ITEM_CLASS_NAME =
+  "flex items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-[var(--surface-card)] px-3 py-2";
+
+interface RoutePedidoStatusItem {
+  pedidoId: number;
+  status: PedidoStatus | null;
+}
+
+interface RefreshQueriesOptions {
+  includePedidoAtivo?: boolean;
+}
 
 function isPedidoStatus(value: string | null | undefined): value is PedidoStatus {
   return (
@@ -202,6 +216,42 @@ function renderProgressSection(
   );
 }
 
+function renderRoutePedidosSection(
+  routePedidos: RoutePedidoStatusItem[],
+): ReactElement | null {
+  if (routePedidos.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className={SECTION_CLASS_NAME} aria-label="Pedidos da rota">
+      <div className={SECTION_TITLE_CLASS_NAME}>Pedidos da Rota</div>
+      <div className="flex flex-col gap-2">
+        {routePedidos.map((routePedido) => {
+          const status = routePedido.status ?? "pendente";
+
+          return (
+            <div
+              key={routePedido.pedidoId}
+              className={ROUTE_PEDIDO_ITEM_CLASS_NAME}
+            >
+              <span className="text-sm text-[var(--text-primary)]">
+                Pedido #{routePedido.pedidoId}
+              </span>
+              <span
+                className={`badge ${getMonitoringBadgeClassName(status)}`}
+                translate="no"
+              >
+                {status}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function OrderMonitoringDashboard({
   pedidoId,
 }: OrderMonitoringDashboardProps): ReactElement {
@@ -253,6 +303,11 @@ export function OrderMonitoringDashboard({
       pedidoQuery.data?.status === "despachado" ||
       pedidoQuery.data?.status === "em_voo",
   });
+  const mapaSnapshotQuery = useQuery({
+    queryKey: ["mapa", "snapshot"],
+    queryFn: getMapaSnapshot,
+    staleTime: QUERY_STALE_TIME,
+  });
   const rotaQuery = useQuery({
     queryKey: ["rota", pedidoQuery.data?.rota_id],
     queryFn: () => getRota(pedidoQuery.data?.rota_id ?? 0),
@@ -271,6 +326,19 @@ export function OrderMonitoringDashboard({
     enabled:
       pedidoQuery.data?.status === "pendente" ||
       pedidoQuery.data?.status === "calculado",
+  });
+  const routePedidoIds = useMemo(() => {
+    const ids = rotaQuery.data?.pedido_ids ?? [];
+
+    return Array.from(new Set([pedidoId, ...ids]));
+  }, [pedidoId, rotaQuery.data?.pedido_ids]);
+  const routePedidoQueries = useQueries({
+    queries: routePedidoIds.map((routePedidoId) => ({
+      queryKey: ["pedido", routePedidoId],
+      queryFn: () => getPedido(routePedidoId),
+      staleTime: QUERY_STALE_TIME,
+      enabled: routePedidoId > 0,
+    })),
   });
   const snapshot = useMemo(() => {
     return buildMonitoringSnapshot(
@@ -292,20 +360,47 @@ export function OrderMonitoringDashboard({
       status: statusOverride,
     };
   }, [snapshot, statusOverride]);
-  const routePoints = useMemo(() => {
-    if (effectiveSnapshot !== null && effectiveSnapshot.routePoints.length > 0) {
-      return effectiveSnapshot.routePoints;
+  const geoJsonSnapshot = useMemo(() => {
+    return buildMonitoringGeoJsonSnapshot(
+      mapaSnapshotQuery.data ?? null,
+      pedidoId,
+      pedidoQuery.data?.rota_id ?? null,
+      effectiveSnapshot?.droneId ?? rotaQuery.data?.drone_id ?? selectedDroneId,
+    );
+  }, [
+    effectiveSnapshot?.droneId,
+    mapaSnapshotQuery.data,
+    pedidoId,
+    pedidoQuery.data?.rota_id,
+    rotaQuery.data?.drone_id,
+    selectedDroneId,
+  ]);
+  const routeWaypoints = useMemo(() => {
+    if (effectiveSnapshot !== null && effectiveSnapshot.routeWaypoints.length > 0) {
+      return effectiveSnapshot.routeWaypoints;
     }
 
     if (rotaQuery.data !== undefined) {
-      return rotaQuery.data.waypoints.map((waypoint) => [
-        waypoint.latitude,
-        waypoint.longitude,
-      ] as [number, number]);
+      return rotaQuery.data.waypoints;
     }
 
     return routePreview;
   }, [effectiveSnapshot, routePreview, rotaQuery.data]);
+  const routePoints = useMemo(() => {
+    if (routeWaypoints.length > 0) {
+      return routePointsFromWaypoints(routeWaypoints);
+    }
+
+    if (effectiveSnapshot !== null && effectiveSnapshot.routePoints.length > 0) {
+      return effectiveSnapshot.routePoints;
+    }
+
+    if (geoJsonSnapshot.routePoints.length > 0) {
+      return geoJsonSnapshot.routePoints;
+    }
+
+    return [];
+  }, [effectiveSnapshot, geoJsonSnapshot.routePoints, routeWaypoints]);
   const activeDroneId = useMemo(() => {
     if (effectiveSnapshot?.droneId) {
       return effectiveSnapshot.droneId;
@@ -335,6 +430,51 @@ export function OrderMonitoringDashboard({
   );
   const orderStream = useDroneTracking(activeDroneId);
   const pedidoStream = usePedidoStream(pedidoId > 0);
+  const routePedidoStatuses = useMemo<RoutePedidoStatusItem[]>(() => {
+    const statusByPedidoId = new Map<number, PedidoStatus | null>();
+
+    routePedidoQueries.forEach((query, index) => {
+      const routePedidoId = routePedidoIds[index];
+      if (routePedidoId === undefined) {
+        return;
+      }
+
+      statusByPedidoId.set(routePedidoId, query.data?.status ?? null);
+    });
+
+    for (const [pedidoIdKey, event] of Object.entries(
+      pedidoStream.latestByPedidoId,
+    )) {
+      if (event === undefined || !isPedidoStatus(event.status_para)) {
+        continue;
+      }
+
+      const routePedidoId = Number(pedidoIdKey);
+
+      if (!Number.isFinite(routePedidoId)) {
+        continue;
+      }
+
+      if (!statusByPedidoId.has(routePedidoId)) {
+        continue;
+      }
+
+      statusByPedidoId.set(routePedidoId, event.status_para);
+    }
+
+    return routePedidoIds.map((routePedidoId) => ({
+      pedidoId: routePedidoId,
+      status: statusByPedidoId.get(routePedidoId) ?? null,
+    }));
+  }, [pedidoStream.latestByPedidoId, routePedidoIds, routePedidoQueries]);
+  const routePedidoStatusById = useMemo<Record<number, PedidoStatus | null>>(() => {
+    return Object.fromEntries(
+      routePedidoStatuses.map((routePedido) => [
+        routePedido.pedidoId,
+        routePedido.status,
+      ]),
+    );
+  }, [routePedidoStatuses]);
   const monitoramento = useMemo(() => {
     return buildDroneMonitoramento(effectiveSnapshot, currentFrame);
   }, [currentFrame, effectiveSnapshot]);
@@ -355,8 +495,12 @@ export function OrderMonitoringDashboard({
       ] as [number, number];
     }
 
+    if (geoJsonSnapshot.dronePosition !== null) {
+      return geoJsonSnapshot.dronePosition;
+    }
+
     return null;
-  }, [currentFrame, effectiveSnapshot]);
+  }, [currentFrame, effectiveSnapshot, geoJsonSnapshot.dronePosition]);
   const effectiveEtaSegundos = useMemo(() => {
     return getEffectiveEtaSegundos(
       currentFrame?.eta_segundos ?? effectiveSnapshot?.etaSegundos ?? null,
@@ -380,6 +524,9 @@ export function OrderMonitoringDashboard({
       heartbeatNow,
     );
   }, [currentFrame, effectiveSnapshot?.positionSnapshot, heartbeatNow]);
+  const effectiveDestination = useMemo(() => {
+    return effectiveSnapshot?.destination ?? geoJsonSnapshot.destination;
+  }, [effectiveSnapshot?.destination, geoJsonSnapshot.destination]);
   const progressPct = useMemo(() => {
     if (effectiveSnapshot === null) {
       return null;
@@ -395,7 +542,8 @@ export function OrderMonitoringDashboard({
   }, [dronesQuery.data?.drones]);
   const canStartFlight =
     effectiveSnapshot?.status === "calculado" &&
-    pedidoQuery.data.rota_id !== null;
+    pedidoQuery.data?.rota_id !== null &&
+    pedidoQuery.data?.rota_id !== undefined;
   const activeRotaId = pedidoAtivoQuery.data?.rota_id ?? pedidoQuery.data?.rota_id ?? null;
 
   useEffect(() => {
@@ -454,7 +602,7 @@ export function OrderMonitoringDashboard({
 
   useEffect(() => {
     const lastEvent = pedidoStream.lastEvent;
-    if (lastEvent === null || lastEvent.pedido_id !== pedidoId) {
+    if (lastEvent === null) {
       return;
     }
 
@@ -463,16 +611,24 @@ export function OrderMonitoringDashboard({
       : null;
 
     if (nextStatus !== null) {
-      setStatusOverride(nextStatus);
-
-      queryClient.setQueryData(["pedido", pedidoId], (currentData: typeof pedidoQuery.data) =>
+      queryClient.setQueryData(
+        ["pedido", lastEvent.pedido_id],
+        (currentData: typeof pedidoQuery.data) =>
         currentData ? { ...currentData, status: nextStatus } : currentData,
       );
-      queryClient.setQueryData(
-        ["pedido-ativo", pedidoId],
-        (currentData: typeof pedidoAtivoQuery.data) =>
-          currentData ? { ...currentData, status: nextStatus } : currentData,
-      );
+
+      if (lastEvent.pedido_id === pedidoId) {
+        setStatusOverride(nextStatus);
+        queryClient.setQueryData(
+          ["pedido-ativo", pedidoId],
+          (currentData: typeof pedidoAtivoQuery.data) =>
+            currentData ? { ...currentData, status: nextStatus } : currentData,
+        );
+      }
+    }
+
+    if (lastEvent.pedido_id !== pedidoId) {
+      return;
     }
 
     if (lastEvent.evento === "pedido_entregue" || nextStatus === "entregue") {
@@ -481,16 +637,14 @@ export function OrderMonitoringDashboard({
       window.setTimeout(() => {
         setCompletionBannerVisible(false);
       }, COMPLETION_BANNER_DURATION_MS);
-      void refreshQueries();
+      void refreshQueries({ includePedidoAtivo: false });
     }
 
     if (nextStatus === "cancelado" || nextStatus === "falha" || nextStatus === "pendente") {
-      void refreshQueries();
+      void refreshQueries({ includePedidoAtivo: false });
     }
   }, [
     pedidoId,
-    pedidoAtivoQuery.data,
-    pedidoQuery.data,
     pedidoStream.lastEvent,
     queryClient,
   ]);
@@ -530,14 +684,24 @@ export function OrderMonitoringDashboard({
     toast.error(pedidoStream.error);
   }, [pedidoStream.error]);
 
-  async function refreshQueries(): Promise<void> {
-    await Promise.all([
+  async function refreshQueries(
+    options: RefreshQueriesOptions = {},
+  ): Promise<void> {
+    const { includePedidoAtivo = true } = options;
+    const invalidations: Promise<unknown>[] = [
       queryClient.invalidateQueries({ queryKey: ["pedido", pedidoId] }),
-      queryClient.invalidateQueries({ queryKey: ["pedido-ativo", pedidoId] }),
       queryClient.invalidateQueries({ queryKey: ["rota"] }),
       queryClient.invalidateQueries({ queryKey: ["drones"] }),
       queryClient.invalidateQueries({ queryKey: ["monitoring-pedidos"] }),
-    ]);
+    ];
+
+    if (includePedidoAtivo) {
+      invalidations.push(
+        queryClient.invalidateQueries({ queryKey: ["pedido-ativo", pedidoId] }),
+      );
+    }
+
+    await Promise.all(invalidations);
   }
 
   async function handleCalcularRota(): Promise<void> {
@@ -550,9 +714,13 @@ export function OrderMonitoringDashboard({
       setIsCalculatingRoute(true);
       const response = await calcularRotas({
         drone_id: selectedDroneId,
-        pedido_ids: [pedidoId],
       });
       const rotaCalculada = response.rotas[0] ?? null;
+
+      if (rotaCalculada === null) {
+        toast.error(response.mensagem || "Nenhuma rota foi calculada para os pedidos pendentes.");
+        return;
+      }
 
       setRoutePreview(rotaCalculada);
       await refreshQueries();
@@ -664,7 +832,11 @@ export function OrderMonitoringDashboard({
       <div className={MAP_PANEL_CLASS_NAME}>
         <MapCanvas
           routePoints={routePoints}
-          destination={effectiveSnapshot.destination}
+          routeWaypoints={routeWaypoints}
+          routePedidoStatusById={routePedidoStatusById}
+          destination={effectiveDestination}
+          depot={geoJsonSnapshot.depot}
+          snapshotDronePosition={geoJsonSnapshot.dronePosition}
           currentFrame={currentFrame}
           positionSnapshot={effectiveSnapshot.positionSnapshot}
           droneDirection={monitoramento?.vetor.direcao ?? null}
@@ -679,6 +851,7 @@ export function OrderMonitoringDashboard({
           </div>
         ) : null}
         {renderHeader(effectiveSnapshot.pedidoId, effectiveSnapshot.status)}
+        {renderRoutePedidosSection(routePedidoStatuses)}
         <TelemetryGrid
           monitoramento={monitoramento}
           etaSegundos={effectiveEtaSegundos}

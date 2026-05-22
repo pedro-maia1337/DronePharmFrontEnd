@@ -14,11 +14,18 @@ import {
   Marker,
   Polyline,
   TileLayer,
+  Tooltip,
   useMap,
 } from "react-leaflet";
 
 import { lerp } from "@/lib/utils";
-import type { PosicaoAtualResponse, WSTelemetriaPayload } from "@/types/api";
+import { getPedidoIdFromWaypointLabel } from "../monitoringUtils";
+import type {
+  PedidoStatus,
+  PosicaoAtualResponse,
+  WSTelemetriaPayload,
+  WaypointResponse,
+} from "@/types/api";
 
 const MAP_TILE_URL =
   "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
@@ -27,6 +34,7 @@ const MAP_ATTRIBUTION =
 const ROUTE_COLOR = "#00ff9c";
 const DESTINATION_COLOR = "#f59e0b";
 const ORIGIN_COLOR = "#3b82f6";
+const WAYPOINT_COLOR = "#f8fafc";
 const DEFAULT_CENTER: [number, number] = [-19.932, -43.9408];
 const DEFAULT_ZOOM = 15;
 const DESTINATION_RADIUS_METERS = 18;
@@ -42,7 +50,11 @@ const MAP_LABEL_CLASS_NAME =
 
 interface MapCanvasProps {
   routePoints: [number, number][];
+  routeWaypoints: WaypointResponse[];
+  routePedidoStatusById?: Record<number, PedidoStatus | null>;
   destination: [number, number] | null;
+  depot: [number, number] | null;
+  snapshotDronePosition: [number, number] | null;
   currentFrame: WSTelemetriaPayload | null;
   positionSnapshot: PosicaoAtualResponse | null;
   droneDirection: number | null;
@@ -55,7 +67,10 @@ interface FitBoundsControllerProps {
 
 interface StaticRouteLayerProps {
   routePoints: [number, number][];
+  routeWaypoints: WaypointResponse[];
+  routePedidoStatusById: Record<number, PedidoStatus | null>;
   destination: [number, number] | null;
+  depot: [number, number] | null;
 }
 
 interface DroneMarkerLayerProps {
@@ -84,6 +99,50 @@ function createStaticIcon(color: string, size: number): DivIcon {
     html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${color};box-shadow:0 0 0 2px color-mix(in srgb, ${color} 30%, transparent);"></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
+  });
+}
+
+function getWaypointBorderColor(status: PedidoStatus | null): string {
+  switch (status) {
+    case "entregue":
+      return "#10b981";
+    case "em_voo":
+      return "#38bdf8";
+    case "despachado":
+    case "calculado":
+      return "#f59e0b";
+    case "cancelado":
+    case "falha":
+      return "#ef4444";
+    case "pendente":
+    default:
+      return ROUTE_COLOR;
+  }
+}
+
+function getWaypointFillColor(status: PedidoStatus | null): string {
+  switch (status) {
+    case "entregue":
+      return "#10b981";
+    default:
+      return WAYPOINT_COLOR;
+  }
+}
+
+function createWaypointIcon(seq: number, status: PedidoStatus | null): DivIcon {
+  const borderColor = getWaypointBorderColor(status);
+  const fillColor = getWaypointFillColor(status);
+  const textColor = status === "entregue" ? "#f8fafc" : "#020617";
+
+  return L.divIcon({
+    className: "",
+    html: `
+      <div style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:9999px;background:${fillColor};color:${textColor};border:2px solid ${borderColor};font-size:11px;font-weight:700;box-shadow:0 8px 20px rgba(2,6,23,0.35);">
+        ${seq}
+      </div>
+    `,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
   });
 }
 
@@ -118,18 +177,20 @@ function getFallbackPosition(
 function getDronePosition(
   currentFrame: WSTelemetriaPayload | null,
   positionSnapshot: PosicaoAtualResponse | null,
+  snapshotDronePosition: [number, number] | null,
 ): [number, number] | null {
   if (currentFrame !== null) {
     return [currentFrame.latitude, currentFrame.longitude];
   }
 
-  return getFallbackPosition(positionSnapshot);
+  return getFallbackPosition(positionSnapshot) ?? snapshotDronePosition;
 }
 
 function getMapCenter(
   routePoints: [number, number][],
   destination: [number, number] | null,
   dronePosition: [number, number] | null,
+  depot: [number, number] | null,
 ): [number, number] {
   if (dronePosition !== null) {
     return dronePosition;
@@ -137,6 +198,10 @@ function getMapCenter(
 
   if (routePoints.length > 0) {
     return routePoints[0];
+  }
+
+  if (depot !== null) {
+    return depot;
   }
 
   if (destination !== null) {
@@ -149,12 +214,20 @@ function getMapCenter(
 function getMapLabel(
   currentFrame: WSTelemetriaPayload | null,
   positionSnapshot: PosicaoAtualResponse | null,
+  snapshotDronePosition: [number, number] | null,
 ): string {
   const latitude = currentFrame?.latitude ?? positionSnapshot?.latitude ?? null;
   const longitude =
     currentFrame?.longitude ?? positionSnapshot?.longitude ?? null;
   const altitude =
     currentFrame?.altitude_m ?? positionSnapshot?.altitude_m ?? null;
+
+  if (
+    (latitude === null || longitude === null) &&
+    snapshotDronePosition !== null
+  ) {
+    return `${snapshotDronePosition[0].toFixed(4)}, ${snapshotDronePosition[1].toFixed(4)} - snapshot inicial`;
+  }
 
   if (latitude === null || longitude === null) {
     return "Aguardando posicao do drone";
@@ -191,12 +264,14 @@ function FitBoundsController({
   return null;
 }
 
-const DESTINATION_ICON = createStaticIcon(DESTINATION_COLOR, 16);
 const ORIGIN_ICON = createStaticIcon(ORIGIN_COLOR, 12);
 
 const StaticRouteLayer = memo(function StaticRouteLayer({
   routePoints,
+  routeWaypoints,
+  routePedidoStatusById,
   destination,
+  depot,
 }: StaticRouteLayerProps): ReactElement {
   return (
     <>
@@ -206,18 +281,50 @@ const StaticRouteLayer = memo(function StaticRouteLayer({
           pathOptions={{ color: ROUTE_COLOR, weight: 3, opacity: 0.9 }}
         />
       ) : null}
-      {routePoints[0] !== undefined ? (
-        <Marker position={routePoints[0]} icon={ORIGIN_ICON} />
+      {depot !== null ? (
+        <Marker position={depot} icon={ORIGIN_ICON}>
+          <Tooltip direction="top" offset={[0, -8]}>
+            Deposito
+          </Tooltip>
+        </Marker>
+      ) : routePoints[0] !== undefined ? (
+        <Marker position={routePoints[0]} icon={ORIGIN_ICON}>
+          <Tooltip direction="top" offset={[0, -8]}>
+            Origem da rota
+          </Tooltip>
+        </Marker>
       ) : null}
+      {routeWaypoints.map((waypoint) => (
+        (() => {
+          const waypointPedidoId = getPedidoIdFromWaypointLabel(waypoint.label);
+          const waypointStatus =
+            waypointPedidoId === null
+              ? null
+              : routePedidoStatusById[waypointPedidoId] ?? null;
+          const tooltipLabel =
+            waypointStatus === null
+              ? waypoint.label
+              : `${waypoint.label} - ${waypointStatus}`;
+
+          return (
+            <Marker
+              key={`${waypoint.seq}-${waypoint.latitude}-${waypoint.longitude}`}
+              position={[waypoint.latitude, waypoint.longitude]}
+              icon={createWaypointIcon(waypoint.seq, waypointStatus)}
+            >
+              <Tooltip direction="top" offset={[0, -10]}>
+                {tooltipLabel}
+              </Tooltip>
+            </Marker>
+          );
+        })()
+      ))}
       {destination !== null ? (
-        <>
-          <Marker position={destination} icon={DESTINATION_ICON} />
-          <Circle
-            center={destination}
-            radius={DESTINATION_RADIUS_METERS}
-            pathOptions={{ color: DESTINATION_COLOR, opacity: 0.7 }}
-          />
-        </>
+        <Circle
+          center={destination}
+          radius={DESTINATION_RADIUS_METERS}
+          pathOptions={{ color: DESTINATION_COLOR, opacity: 0.7 }}
+        />
       ) : null}
     </>
   );
@@ -279,29 +386,55 @@ const DroneMarkerLayer = memo(function DroneMarkerLayer({
     return null;
   }
 
-  return <Marker position={animatedPosition} icon={droneIcon} />;
+  return (
+    <Marker position={animatedPosition} icon={droneIcon}>
+      <Tooltip direction="top" offset={[0, -10]}>
+        {signalLost ? "Sinal do drone indisponivel" : "Drone em operacao"}
+      </Tooltip>
+    </Marker>
+  );
 });
 
 export function MapCanvas({
   routePoints,
+  routeWaypoints,
+  routePedidoStatusById = {},
   destination,
+  depot,
+  snapshotDronePosition,
   currentFrame,
   positionSnapshot,
   droneDirection,
   signalLost,
 }: MapCanvasProps): ReactElement {
-  const dronePosition = getDronePosition(currentFrame, positionSnapshot);
-  const mapCenter = getMapCenter(routePoints, destination, dronePosition);
+  const dronePosition = getDronePosition(
+    currentFrame,
+    positionSnapshot,
+    snapshotDronePosition,
+  );
+  const mapCenter = getMapCenter(routePoints, destination, dronePosition, depot);
   const overlayPoints = useMemo(() => {
     const points = [...routePoints];
+
+    if (depot !== null) {
+      points.push(depot);
+    }
 
     if (destination !== null) {
       points.push(destination);
     }
 
+    if (dronePosition !== null) {
+      points.push(dronePosition);
+    }
+
     return points;
-  }, [destination, routePoints]);
-  const mapLabel = getMapLabel(currentFrame, positionSnapshot);
+  }, [depot, destination, dronePosition, routePoints]);
+  const mapLabel = getMapLabel(
+    currentFrame,
+    positionSnapshot,
+    snapshotDronePosition,
+  );
 
   return (
     <div className={MAP_WRAPPER_CLASS_NAME}>
@@ -313,7 +446,13 @@ export function MapCanvas({
       >
         <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILE_URL} />
         <FitBoundsController points={overlayPoints} />
-        <StaticRouteLayer routePoints={routePoints} destination={destination} />
+        <StaticRouteLayer
+          routePoints={routePoints}
+          routeWaypoints={routeWaypoints}
+          routePedidoStatusById={routePedidoStatusById}
+          destination={destination}
+          depot={depot}
+        />
         <DroneMarkerLayer
           dronePosition={dronePosition}
           droneDirection={droneDirection}

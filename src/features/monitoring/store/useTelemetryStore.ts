@@ -3,7 +3,9 @@ import { create } from "zustand";
 import type {
   RotaResponse,
   WSTelemetriaPayload,
+  WaypointResponse,
 } from "../../../types/api";
+import { sortWaypoints } from "../monitoringUtils";
 
 interface DroneStreamState {
   connected: boolean;
@@ -19,7 +21,7 @@ export interface StoreState {
   historyByDroneId: TelemetryHistoryMap;
   streamStateByDroneId: DroneStreamStateMap;
   isReplaying: boolean;
-  routePreview: [number, number][];
+  routePreview: WaypointResponse[];
   selectedDroneId: string;
   getFrame: (droneId: string) => WSTelemetriaPayload | null;
   getHistory: (droneId: string) => WSTelemetriaPayload[];
@@ -148,9 +150,7 @@ export const useTelemetryStore = create<StoreState>((set, get) => ({
   },
   setRoutePreview: (rota) => {
     set({
-      routePreview:
-        rota?.waypoints.map((waypoint) => [waypoint.latitude, waypoint.longitude]) ??
-        [],
+      routePreview: sortWaypoints(rota?.waypoints ?? []),
     });
   },
   setSelectedDroneId: (droneId) => {

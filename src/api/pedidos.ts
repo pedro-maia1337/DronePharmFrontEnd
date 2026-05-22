@@ -56,6 +56,19 @@ export function criarPedido(body: PedidoCreate): Promise<PedidoResponse> {
   });
 }
 
+export async function criarPedidosEmLote(
+  bodies: PedidoCreate[],
+): Promise<PedidoResponse[]> {
+  const createdPedidos: PedidoResponse[] = [];
+
+  for (const body of bodies) {
+    const createdPedido = await criarPedido(body);
+    createdPedidos.push(createdPedido);
+  }
+
+  return createdPedidos;
+}
+
 export function getPedido(id: number): Promise<PedidoResponse> {
   return apiFetch<PedidoResponse>(`${PEDIDOS_BASE_PATH}/${id}`);
 }

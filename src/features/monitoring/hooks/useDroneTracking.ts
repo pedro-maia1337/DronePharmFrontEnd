@@ -184,7 +184,7 @@ export function useDroneTracking(droneId: string): DroneTrackingState {
           }
         };
 
-        socket.onerror = (event) => {
+        socket.onerror = () => {
           console.error(`WebSocket error: Falha na conexao com o servidor de telemetria para o drone ${droneId}`);
           setStreamState(droneId, false, "Erro de conexao no canal de telemetria.");
         };

@@ -2,11 +2,11 @@ import { useEffect, useMemo, type ReactElement } from "react";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { useForm, type FieldError } from "react-hook-form";
+import { useFieldArray, useForm, type FieldError } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 
 import { listFarmacias } from "@/api/farmacias";
-import { criarPedido } from "@/api/pedidos";
+import { criarPedidosEmLote } from "@/api/pedidos";
 import { Button } from "@/components/ui/button";
 import { FormInput } from "@/components/ui/FormInput";
 import { FormSelect } from "@/components/ui/FormSelect";
@@ -16,8 +16,10 @@ import type { HTTPValidationError, PedidoCreate } from "@/types/api";
 
 import {
   pedidoSchema,
-  type PedidoFormInput,
   type PedidoFormData,
+  type PedidoFormInput,
+  type PedidoFormItemData,
+  type PedidoFormItemInput,
 } from "./pedidoSchema";
 import { useFarmaciasStore } from "../farmacias/store/useFarmaciasStore";
 import { usePedidosStore } from "./store/usePedidosStore";
@@ -26,16 +28,15 @@ const PAGE_CLASS_NAME = "min-h-[calc(100dvh-56px)] bg-[var(--surface-base)]";
 const TOPBAR_CLASS_NAME =
   "border-b border-[var(--surface-border)] bg-[var(--surface-panel)]";
 const TOPBAR_CONTENT_CLASS_NAME =
-  "mx-auto flex h-14 w-full max-w-[760px] items-center justify-between gap-4 px-6";
+  "mx-auto flex h-14 w-full max-w-[920px] items-center justify-between gap-4 px-6";
 const BREADCRUMB_CLASS_NAME = "flex items-center gap-2 text-sm";
 const BREADCRUMB_LINK_CLASS_NAME =
   "text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]";
 const BREADCRUMB_CURRENT_CLASS_NAME = "text-[var(--text-primary)]";
 const ACTIONS_CLASS_NAME = "flex items-center gap-2";
 const CONTENT_CLASS_NAME =
-  "mx-auto flex w-full max-w-[760px] flex-col gap-6 px-6 py-8";
+  "mx-auto flex w-full max-w-[920px] flex-col gap-6 px-6 py-8";
 const TITLE_CLASS_NAME = "text-xl font-semibold text-[var(--text-primary)]";
-const DESCRIPTION_CLASS_NAME = "text-sm text-[var(--text-secondary)]";
 const CARD_CLASS_NAME =
   "rounded-[var(--radius-lg)] border border-[var(--surface-border)] bg-[var(--surface-card)] p-7";
 const CARD_TITLE_CLASS_NAME =
@@ -44,7 +45,8 @@ const GRID_TWO_COLUMNS_CLASS_NAME = "grid gap-4 md:grid-cols-2";
 const DIVIDER_CLASS_NAME = "my-6 border-t border-[var(--surface-border)]";
 const ROOT_ERROR_CLASS_NAME =
   "mb-4 rounded-[var(--radius-md)] border border-[var(--status-danger)] bg-[var(--status-danger-bg)] px-4 py-3 text-sm text-[var(--status-danger)]";
-const FOOTER_ACTIONS_CLASS_NAME = "flex items-center justify-end gap-3";
+const FOOTER_ACTIONS_CLASS_NAME = "flex items-center justify-between gap-3";
+const BATCH_ACTIONS_CLASS_NAME = "flex items-center justify-between gap-3";
 const QUERY_STALE_TIME = 30_000;
 const PEDIDOS_ROUTE_PATH = "/pedidos";
 const DECIMAL_COORDINATE_HINT =
@@ -52,9 +54,9 @@ const DECIMAL_COORDINATE_HINT =
 const DELIVERY_WINDOW_HINT =
   "Se nao for informada, a janela final sera calculada automaticamente pela prioridade.";
 const LOAD_ERROR_MESSAGE = "Nao foi possivel carregar as farmacias.";
-const SAVE_ERROR_MESSAGE = "Nao foi possivel salvar o pedido.";
+const SAVE_ERROR_MESSAGE = "Nao foi possivel salvar o lote de pedidos.";
 
-type PedidoFieldName = keyof PedidoFormData;
+type PedidoFieldName = keyof PedidoFormItemData;
 
 const PEDIDO_FIELD_NAMES: PedidoFieldName[] = [
   "farmacia_id",
@@ -65,6 +67,18 @@ const PEDIDO_FIELD_NAMES: PedidoFieldName[] = [
   "descricao",
   "janela_fim",
 ];
+
+function createEmptyPedidoInput(): PedidoFormItemInput {
+  return {
+    farmacia_id: "",
+    latitude: "",
+    longitude: "",
+    peso_kg: "",
+    prioridade: "2",
+    descricao: "",
+    janela_fim: "",
+  };
+}
 
 function isValidationError(error: unknown): error is HTTPValidationError {
   if (typeof error !== "object" || error === null) {
@@ -99,7 +113,7 @@ function getFieldError(error: unknown): FieldError | undefined {
 }
 
 function getFieldNameFromLocation(
-  location: Array<string | number> | undefined
+  location: Array<string | number> | undefined,
 ): PedidoFieldName | null {
   if (location === undefined) {
     return null;
@@ -131,7 +145,7 @@ function getFieldNameFromLocation(
   return null;
 }
 
-function buildPedidoPayload(data: PedidoFormData): PedidoCreate {
+function buildPedidoPayload(data: PedidoFormItemData): PedidoCreate {
   const descricao = data.descricao?.trim();
   const janelaFim = data.janela_fim?.trim();
 
@@ -175,19 +189,18 @@ export function FormPedido(): ReactElement {
     control,
     handleSubmit,
     register,
+    clearErrors,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<PedidoFormInput, undefined, PedidoFormData>({
     resolver: zodResolver(pedidoSchema),
     defaultValues: {
-      farmacia_id: "",
-      latitude: "",
-      longitude: "",
-      peso_kg: "",
-      prioridade: "2",
-      descricao: "",
-      janela_fim: "",
+      pedidos: [createEmptyPedidoInput()],
     },
+  });
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "pedidos",
   });
   const farmaciasQuery = useQuery({
     queryKey: ["farmacias"],
@@ -212,49 +225,64 @@ export function FormPedido(): ReactElement {
           value: String(farmacia.id),
           label: `${farmacia.nome} - ${farmacia.cidade}`,
         })),
-    [farmacias]
+    [farmacias],
   );
 
   async function handleValidSubmit(data: PedidoFormData): Promise<void> {
-    try {
-      const pedidoCriado = await criarPedido(buildPedidoPayload(data));
+    clearErrors();
 
-      adicionarPedido(pedidoCriado);
-      navigate(PEDIDOS_ROUTE_PATH);
-    } catch (error) {
-      if (!isValidationError(error) || error.detail === undefined) {
-        setError("root", {
-          type: "server",
-          message: getErrorMessage(error),
-        });
-        return;
-      }
+    const payloads = data.pedidos.map(buildPedidoPayload);
+    const createdPedidos = [];
 
-      let hasMappedFieldError = false;
+    for (let index = 0; index < payloads.length; index += 1) {
+      try {
+        const [createdPedido] = await criarPedidosEmLote([payloads[index]]);
+        createdPedidos.push(createdPedido);
+      } catch (error) {
+        if (isValidationError(error) && error.detail !== undefined) {
+          let hasMappedFieldError = false;
 
-      for (const detail of error.detail) {
-        const fieldName = getFieldNameFromLocation(detail.loc);
+          for (const detail of error.detail) {
+            const fieldName = getFieldNameFromLocation(detail.loc);
 
-        if (fieldName === null) {
-          continue;
+            if (fieldName === null) {
+              continue;
+            }
+
+            hasMappedFieldError = true;
+            setError(`pedidos.${index}.${fieldName}`, {
+              type: detail.type,
+              message: detail.msg,
+            });
+          }
+
+          if (hasMappedFieldError) {
+            setError("root", {
+              type: "server",
+              message:
+                createdPedidos.length > 0
+                  ? `${createdPedidos.length} pedido(s) foram criados antes da falha na linha ${index + 1}.`
+                  : `Revise os campos do pedido ${index + 1}.`,
+            });
+            return;
+          }
         }
 
-        hasMappedFieldError = true;
-        setError(fieldName, {
-          type: detail.type,
-          message: detail.msg,
+        setError("root", {
+          type: "server",
+          message:
+            createdPedidos.length > 0
+              ? `${createdPedidos.length} pedido(s) foram criados antes da falha na linha ${index + 1}. ${getErrorMessage(error)}`
+              : getErrorMessage(error),
         });
-      }
-
-      if (hasMappedFieldError) {
         return;
       }
-
-      setError("root", {
-        type: "server",
-        message: getErrorMessage(error),
-      });
     }
+
+    createdPedidos.forEach((pedido) => {
+      adicionarPedido(pedido);
+    });
+    navigate(PEDIDOS_ROUTE_PATH);
   }
 
   if (farmacias.length === 0 && farmaciasQuery.isLoading) {
@@ -274,7 +302,7 @@ export function FormPedido(): ReactElement {
               Pedidos
             </Link>
             <span className="text-[var(--text-muted)]">/</span>
-            <span className={BREADCRUMB_CURRENT_CLASS_NAME}>Novo Pedido</span>
+            <span className={BREADCRUMB_CURRENT_CLASS_NAME}>Novo Lote</span>
           </nav>
 
           <div className={ACTIONS_CLASS_NAME}>
@@ -282,7 +310,7 @@ export function FormPedido(): ReactElement {
               <Link to={PEDIDOS_ROUTE_PATH}>Cancelar</Link>
             </Button>
             <Button form="pedido-form" type="submit" disabled={isSubmitting}>
-              Salvar Pedido
+              Salvar Pedidos
             </Button>
           </div>
         </div>
@@ -290,10 +318,7 @@ export function FormPedido(): ReactElement {
 
       <div className={CONTENT_CLASS_NAME}>
         <header className="flex flex-col gap-1">
-          <h1 className={TITLE_CLASS_NAME}>Novo Pedido</h1>
-          <p className={DESCRIPTION_CLASS_NAME}>
-            Registre um novo destino para roteirizacao e monitoramento operacional.
-          </p>
+          <h1 className={TITLE_CLASS_NAME}>Novo Lote de Pedidos</h1>
         </header>
 
         <form
@@ -302,103 +327,148 @@ export function FormPedido(): ReactElement {
           className="flex flex-col gap-6"
         >
           <section className={CARD_CLASS_NAME}>
-            <h2 className={CARD_TITLE_CLASS_NAME}>Destino</h2>
-            <div className="flex flex-col gap-4">
-              <FormSelect
-                label="Farmacia de origem"
-                name="farmacia_id"
-                control={control}
-                options={farmaciasAtivasOptions}
-                placeholder="Selecione uma farmacia ativa"
-                required
-                disabled={farmaciasAtivasOptions.length === 0}
-              />
-
-              <div className={GRID_TWO_COLUMNS_CLASS_NAME}>
-                <FormInput
-                  label="Latitude"
-                  required
-                  type="number"
-                  step="0.0001"
-                  suffix="°"
-                  hint={DECIMAL_COORDINATE_HINT}
-                  error={getFieldError(errors.latitude)}
-                  useDataFont
-                  {...register("latitude")}
-                />
-                <FormInput
-                  label="Longitude"
-                  required
-                  type="number"
-                  step="0.0001"
-                  suffix="°"
-                  hint={DECIMAL_COORDINATE_HINT}
-                  error={getFieldError(errors.longitude)}
-                  useDataFont
-                  {...register("longitude")}
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className={CARD_CLASS_NAME}>
-            <h2 className={CARD_TITLE_CLASS_NAME}>Carga</h2>
-            <div className="flex flex-col gap-4">
-              <div className={GRID_TWO_COLUMNS_CLASS_NAME}>
-                <FormInput
-                  label="Peso"
-                  required
-                  type="number"
-                  step="0.1"
-                  suffix="kg"
-                  error={getFieldError(errors.peso_kg)}
-                  useDataFont
-                  {...register("peso_kg")}
-                />
-                <FormInput
-                  label="Descricao"
-                  error={getFieldError(errors.descricao)}
-                  placeholder="Insulina - UBS Centro"
-                  autoComplete="off"
-                  {...register("descricao")}
-                />
+            <div className={BATCH_ACTIONS_CLASS_NAME}>
+              <div>
+                <h2 className={CARD_TITLE_CLASS_NAME}>Pontos de Entrega</h2>
               </div>
 
-              <FormInput
-                label="Janela de entrega"
-                type="datetime-local"
-                hint={DELIVERY_WINDOW_HINT}
-                error={getFieldError(errors.janela_fim)}
-                useDataFont
-                {...register("janela_fim")}
-              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => append(createEmptyPedidoInput())}
+                disabled={isSubmitting}
+              >
+                Adicionar Ponto
+              </Button>
             </div>
-          </section>
 
-          <section className={CARD_CLASS_NAME}>
-            <RadioGroup
-              legend="Prioridade"
-              name="prioridade"
-              control={control}
-              required
-              options={[
-                {
-                  value: "1",
-                  label: "P1 Urgente",
-                  description: "Janela automatica de 1 hora.",
-                },
-                {
-                  value: "2",
-                  label: "P2 Normal",
-                  description: "Janela automatica de 4 horas.",
-                },
-                {
-                  value: "3",
-                  label: "P3 Reabastecimento",
-                  description: "Janela automatica de 24 horas.",
-                },
-              ]}
-            />
+            <div className="mt-6 flex flex-col gap-6">
+              {fields.map((field, index) => (
+                <article
+                  key={field.id}
+                  className="rounded-[var(--radius-lg)] border border-[var(--surface-border)] bg-[var(--surface-panel)] p-5"
+                >
+                  <div className="mb-5 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold text-[var(--text-primary)]">
+                        Ponto {String(index + 1).padStart(2, "0")}
+                      </h3>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => remove(index)}
+                      disabled={fields.length === 1 || isSubmitting}
+                    >
+                      Remover
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-col gap-6">
+                    <section>
+                      <h4 className={CARD_TITLE_CLASS_NAME}>Destino</h4>
+                      <div className="flex flex-col gap-4">
+                        <FormSelect
+                          label="Farmacia de origem"
+                          name={`pedidos.${index}.farmacia_id`}
+                          control={control}
+                          options={farmaciasAtivasOptions}
+                          placeholder="Selecione uma farmacia ativa"
+                          required
+                          disabled={farmaciasAtivasOptions.length === 0}
+                        />
+
+                        <div className={GRID_TWO_COLUMNS_CLASS_NAME}>
+                          <FormInput
+                            label="Latitude"
+                            required
+                            type="number"
+                            step="0.0001"
+                            suffix="°"
+                            hint={DECIMAL_COORDINATE_HINT}
+                            error={getFieldError(errors.pedidos?.[index]?.latitude)}
+                            useDataFont
+                            {...register(`pedidos.${index}.latitude`)}
+                          />
+                          <FormInput
+                            label="Longitude"
+                            required
+                            type="number"
+                            step="0.0001"
+                            suffix="°"
+                            hint={DECIMAL_COORDINATE_HINT}
+                            error={getFieldError(errors.pedidos?.[index]?.longitude)}
+                            useDataFont
+                            {...register(`pedidos.${index}.longitude`)}
+                          />
+                        </div>
+                      </div>
+                    </section>
+
+                    <section>
+                      <h4 className={CARD_TITLE_CLASS_NAME}>Carga</h4>
+                      <div className="flex flex-col gap-4">
+                        <div className={GRID_TWO_COLUMNS_CLASS_NAME}>
+                          <FormInput
+                            label="Peso"
+                            required
+                            type="number"
+                            step="0.1"
+                            suffix="kg"
+                            error={getFieldError(errors.pedidos?.[index]?.peso_kg)}
+                            useDataFont
+                            {...register(`pedidos.${index}.peso_kg`)}
+                          />
+                          <FormInput
+                            label="Descricao"
+                            error={getFieldError(errors.pedidos?.[index]?.descricao)}
+                            placeholder="Insulina - UBS Centro"
+                            autoComplete="off"
+                            {...register(`pedidos.${index}.descricao`)}
+                          />
+                        </div>
+
+                        <FormInput
+                          label="Janela de entrega"
+                          type="datetime-local"
+                          hint={DELIVERY_WINDOW_HINT}
+                          error={getFieldError(errors.pedidos?.[index]?.janela_fim)}
+                          useDataFont
+                          {...register(`pedidos.${index}.janela_fim`)}
+                        />
+                      </div>
+                    </section>
+
+                    <section>
+                      <RadioGroup
+                        legend="Prioridade"
+                        name={`pedidos.${index}.prioridade`}
+                        control={control}
+                        required
+                        options={[
+                          {
+                            value: "1",
+                            label: "P1 Urgente",
+                            description: "Janela automatica de 1 hora.",
+                          },
+                          {
+                            value: "2",
+                            label: "P2 Normal",
+                            description: "Janela automatica de 4 horas.",
+                          },
+                          {
+                            value: "3",
+                            label: "P3 Reabastecimento",
+                            description: "Janela automatica de 24 horas.",
+                          },
+                        ]}
+                      />
+                    </section>
+                  </div>
+                </article>
+              ))}
+            </div>
 
             <div className={DIVIDER_CLASS_NAME} />
 
@@ -409,12 +479,23 @@ export function FormPedido(): ReactElement {
             ) : null}
 
             <div className={FOOTER_ACTIONS_CLASS_NAME}>
-              <Button asChild variant="outline" type="button">
-                <Link to={PEDIDOS_ROUTE_PATH}>Cancelar</Link>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => append(createEmptyPedidoInput())}
+                disabled={isSubmitting}
+              >
+                Adicionar Ponto
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                Salvar Pedido
-              </Button>
+
+              <div className="flex items-center gap-3">
+                <Button asChild variant="outline" type="button">
+                  <Link to={PEDIDOS_ROUTE_PATH}>Cancelar</Link>
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  Salvar Pedidos
+                </Button>
+              </div>
             </div>
           </section>
         </form>

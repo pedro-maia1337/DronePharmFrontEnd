@@ -1,4 +1,6 @@
 import type {
+  MapaSnapshotFeature,
+  MapaSnapshotResponse,
   PedidoAtivoResponse,
   PedidoResponse,
   PedidoResumoTrackingResponse,
@@ -20,6 +22,7 @@ export interface MonitoringSnapshot {
   pedido: PedidoResumoTrackingResponse;
   destination: [number, number] | null;
   positionSnapshot: PosicaoAtualResponse | null;
+  routeWaypoints: WaypointResponse[];
   routePoints: [number, number][];
   etaSegundos: number | null;
   tempoDecorridoSegundos: number | null;
@@ -49,6 +52,13 @@ export interface DroneMonitoramento {
   vetor: Vetor;
   status_missao: StatusMissao;
   eta_segundos: number | null;
+}
+
+export interface MonitoringGeoJsonSnapshot {
+  depot: [number, number] | null;
+  destination: [number, number] | null;
+  dronePosition: [number, number] | null;
+  routePoints: [number, number][];
 }
 
 function toRadians(value: number): number {
@@ -89,12 +99,127 @@ function getDestination(
 function getRoutePoints(
   pedidoAtivo: PedidoAtivoResponse | null,
 ): [number, number][] {
-  const waypoints = pedidoAtivo?.rota?.waypoints ?? [];
+  const waypoints = sortWaypoints(pedidoAtivo?.rota?.waypoints ?? []);
 
-  return waypoints.map((waypoint: WaypointResponse) => [
-    waypoint.latitude,
-    waypoint.longitude,
+  return routePointsFromWaypoints(waypoints);
+}
+
+export function waypointToLatLng(
+  waypoint: WaypointResponse,
+): [number, number] {
+  return [waypoint.latitude, waypoint.longitude];
+}
+
+export function sortWaypoints(
+  waypoints: WaypointResponse[],
+): WaypointResponse[] {
+  return [...waypoints].sort((left, right) => left.seq - right.seq);
+}
+
+export function routePointsFromWaypoints(
+  waypoints: WaypointResponse[],
+): [number, number][] {
+  return sortWaypoints(waypoints).map(waypointToLatLng);
+}
+
+export function getPedidoIdFromWaypointLabel(label: string): number | null {
+  const match = /pedido\s+#(\d+)/i.exec(label);
+
+  if (match === null) {
+    return null;
+  }
+
+  return Number.parseInt(match[1], 10);
+}
+
+function pointCoordinatesToLatLng(
+  feature: MapaSnapshotFeature,
+): [number, number] | null {
+  if (feature.geometry.type !== "Point") {
+    return null;
+  }
+
+  const [longitude, latitude] = feature.geometry.coordinates;
+
+  return [latitude, longitude];
+}
+
+function lineCoordinatesToLatLng(
+  feature: MapaSnapshotFeature,
+): [number, number][] {
+  if (feature.geometry.type !== "LineString") {
+    return [];
+  }
+
+  return feature.geometry.coordinates.map(([longitude, latitude]) => [
+    latitude,
+    longitude,
   ]);
+}
+
+export function buildMonitoringGeoJsonSnapshot(
+  snapshot: MapaSnapshotResponse | null,
+  pedidoId: number,
+  rotaId: number | null,
+  droneId: string,
+): MonitoringGeoJsonSnapshot {
+  if (snapshot === null) {
+    return {
+      depot: null,
+      destination: null,
+      dronePosition: null,
+      routePoints: [],
+    };
+  }
+
+  let depot: [number, number] | null = null;
+  let destination: [number, number] | null = null;
+  let dronePosition: [number, number] | null = null;
+  let routePoints: [number, number][] = [];
+
+  for (const feature of snapshot.features) {
+    const featureType = feature.properties.tipo;
+
+    if (featureType === "deposito" && depot === null) {
+      depot = pointCoordinatesToLatLng(feature);
+      continue;
+    }
+
+    if (
+      featureType === "pedido" &&
+      feature.properties.id === pedidoId &&
+      destination === null
+    ) {
+      destination = pointCoordinatesToLatLng(feature);
+      continue;
+    }
+
+    if (
+      featureType === "drone" &&
+      typeof feature.properties.id === "string" &&
+      feature.properties.id === droneId &&
+      dronePosition === null
+    ) {
+      dronePosition = pointCoordinatesToLatLng(feature);
+      continue;
+    }
+
+    if (
+      featureType === "rota_linha" &&
+      rotaId !== null &&
+      feature.properties.id === rotaId &&
+      routePoints.length === 0
+    ) {
+      routePoints = lineCoordinatesToLatLng(feature);
+    }
+  }
+
+  return {
+    depot,
+    destination,
+    dronePosition,
+    routePoints,
+  };
 }
 
 function getHaversineDistance(
@@ -227,6 +352,7 @@ export function buildMonitoringSnapshot(
     pedido: getPedidoResumo(pedidoAtivo, pedido),
     destination: getDestination(pedidoAtivo, pedido),
     positionSnapshot: pedidoAtivo?.posicao_atual ?? null,
+    routeWaypoints: sortWaypoints(pedidoAtivo?.rota?.waypoints ?? []),
     routePoints: getRoutePoints(pedidoAtivo),
     etaSegundos:
       pedidoAtivo?.eta_segundos ?? pedidoAtivo?.tempo_restante_seg ?? null,

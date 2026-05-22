@@ -99,6 +99,41 @@ export interface WaypointResponse {
   label: string;
 }
 
+export interface GeoJsonPointGeometry {
+  type: "Point";
+  coordinates: [number, number];
+}
+
+export interface GeoJsonLineStringGeometry {
+  type: "LineString";
+  coordinates: [number, number][];
+}
+
+export type GeoJsonGeometry = GeoJsonPointGeometry | GeoJsonLineStringGeometry;
+
+export interface MapaSnapshotFeatureProperties {
+  id?: number | string;
+  tipo?: string;
+  nome?: string;
+  status?: string;
+  drone_id?: string;
+  rota_id?: number;
+  seq?: number;
+  label?: string;
+  [key: string]: unknown;
+}
+
+export interface MapaSnapshotFeature {
+  type: "Feature";
+  geometry: GeoJsonGeometry;
+  properties: MapaSnapshotFeatureProperties;
+}
+
+export interface MapaSnapshotResponse {
+  type: "FeatureCollection";
+  features: MapaSnapshotFeature[];
+}
+
 export interface DroneCreate {
   id: string;
   nome: string;
