@@ -9,9 +9,18 @@ const LATITUDE_MIN = -90;
 const LATITUDE_MAX = 90;
 const LONGITUDE_MIN = -180;
 const LONGITUDE_MAX = 180;
+const COORDINATE_DECIMAL_PLACES = 6;
+const COORDINATE_DECIMAL_FACTOR = 10 ** COORDINATE_DECIMAL_PLACES;
+const FLOATING_POINT_TOLERANCE = 1e-8;
 
 function isIsoDateTime(value: string): boolean {
   return !Number.isNaN(Date.parse(value));
+}
+
+function hasAtMostCoordinateDecimalPlaces(value: number): boolean {
+  const scaledValue = value * COORDINATE_DECIMAL_FACTOR;
+
+  return Math.abs(scaledValue - Math.round(scaledValue)) < FLOATING_POINT_TOLERANCE;
 }
 
 export const pedidoItemSchema = z.object({
@@ -26,13 +35,19 @@ export const pedidoItemSchema = z.object({
       error: "A latitude deve ser um numero valido.",
     })
     .min(LATITUDE_MIN, "A latitude deve estar entre -90 e 90.")
-    .max(LATITUDE_MAX, "A latitude deve estar entre -90 e 90."),
+    .max(LATITUDE_MAX, "A latitude deve estar entre -90 e 90.")
+    .refine(hasAtMostCoordinateDecimalPlaces, {
+      message: "A latitude deve ter no maximo 6 casas decimais.",
+    }),
   longitude: z
     .coerce.number({
       error: "A longitude deve ser um numero valido.",
     })
     .min(LONGITUDE_MIN, "A longitude deve estar entre -180 e 180.")
-    .max(LONGITUDE_MAX, "A longitude deve estar entre -180 e 180."),
+    .max(LONGITUDE_MAX, "A longitude deve estar entre -180 e 180.")
+    .refine(hasAtMostCoordinateDecimalPlaces, {
+      message: "A longitude deve ter no maximo 6 casas decimais.",
+    }),
   peso_kg: z
     .coerce.number({
       error: "O peso deve ser um numero valido.",

@@ -49,8 +49,10 @@ const FOOTER_ACTIONS_CLASS_NAME = "flex items-center justify-between gap-3";
 const BATCH_ACTIONS_CLASS_NAME = "flex items-center justify-between gap-3";
 const QUERY_STALE_TIME = 30_000;
 const PEDIDOS_ROUTE_PATH = "/pedidos";
+const COORDINATE_DECIMAL_PLACES = 6;
+const COORDINATE_INPUT_STEP = "0.000001";
 const DECIMAL_COORDINATE_HINT =
-  "Use coordenadas decimais WGS84 com ate quatro casas decimais.";
+  "Use coordenadas decimais WGS84 com ate seis casas decimais.";
 const DELIVERY_WINDOW_HINT =
   "Se nao for informada, a janela final sera calculada automaticamente pela prioridade.";
 const LOAD_ERROR_MESSAGE = "Nao foi possivel carregar as farmacias.";
@@ -145,14 +147,18 @@ function getFieldNameFromLocation(
   return null;
 }
 
+function roundCoordinate(value: number): number {
+  return Number(value.toFixed(COORDINATE_DECIMAL_PLACES));
+}
+
 function buildPedidoPayload(data: PedidoFormItemData): PedidoCreate {
   const descricao = data.descricao?.trim();
   const janelaFim = data.janela_fim?.trim();
 
   return {
     coordenada: {
-      latitude: data.latitude,
-      longitude: data.longitude,
+      latitude: roundCoordinate(data.latitude),
+      longitude: roundCoordinate(data.longitude),
     },
     peso_kg: data.peso_kg,
     prioridade: data.prioridade,
@@ -384,7 +390,7 @@ export function FormPedido(): ReactElement {
                             label="Latitude"
                             required
                             type="number"
-                            step="0.0001"
+                            step={COORDINATE_INPUT_STEP}
                             suffix="°"
                             hint={DECIMAL_COORDINATE_HINT}
                             error={getFieldError(errors.pedidos?.[index]?.latitude)}
@@ -395,7 +401,7 @@ export function FormPedido(): ReactElement {
                             label="Longitude"
                             required
                             type="number"
-                            step="0.0001"
+                            step={COORDINATE_INPUT_STEP}
                             suffix="°"
                             hint={DECIMAL_COORDINATE_HINT}
                             error={getFieldError(errors.pedidos?.[index]?.longitude)}
