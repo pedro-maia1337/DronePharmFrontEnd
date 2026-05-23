@@ -6,7 +6,7 @@ const LAYOUT_CLASS_NAME = "flex min-h-dvh flex-col bg-background text-foreground
 const HEADER_CLASS_NAME =
   "flex h-14 items-center justify-between border-b border-border bg-card px-6";
 const BRAND_CLASS_NAME = "text-sm font-semibold tracking-[0.08em] text-foreground";
-const NAV_CLASS_NAME = "flex items-center gap-2";
+const NAV_CLASS_NAME = "flex items-center gap-2 overflow-x-auto";
 const LINK_BASE_CLASS_NAME =
   "rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150";
 const LINK_IDLE_CLASS_NAME =
@@ -23,6 +23,7 @@ interface NavigationItem {
 
 const NAVIGATION_ITEMS: NavigationItem[] = [
   { to: "/monitoramento", label: "Monitoramento" },
+  { to: "/kpis", label: "KPIs" },
   { to: "/pedidos", label: "Pedidos", end: true },
   { to: "/pedidos/novo", label: "Novo Pedido" },
   { to: "/farmacias", label: "Farmacias", end: true },

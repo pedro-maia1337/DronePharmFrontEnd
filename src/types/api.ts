@@ -205,6 +205,59 @@ export interface FarmaciaListResponse {
   farmacias: FarmaciaResponse[];
 }
 
+export interface HistoricoResponse {
+  id: number;
+  pedido_id: number;
+  rota_id: number;
+  drone_id: string;
+  farmacia_id: number;
+  prioridade: number;
+  peso_kg: number;
+  distancia_km: number;
+  tempo_real_min: number | null;
+  entregue_no_prazo: boolean;
+  criado_em: string;
+}
+
+export interface HistoricoListResponse {
+  total: number;
+  historico: HistoricoResponse[];
+}
+
+export interface KpiGeralResponse {
+  total_entregas: number;
+  entregas_no_prazo: number;
+  taxa_pontualidade_pct: number;
+  tempo_medio_min: number;
+  distancia_media_km: number;
+  peso_total_entregue_kg: number;
+}
+
+export interface KpiFarmaciaResponse {
+  farmacia_id: number;
+  farmacia: string;
+  cidade: string;
+  uf: string;
+  total_entregas: number;
+  entregas_no_prazo: number;
+  tempo_medio_min: number | null;
+  distancia_media_km: number | null;
+  peso_total_kg: number | null;
+}
+
+export interface KpiFarmaciaListResponse {
+  total: number;
+  farmacias: KpiFarmaciaResponse[];
+}
+
+export interface KpiTempoRealResponse {
+  total_ativos: number;
+  pedidos_em_voo: number;
+  concluidos: number;
+  pontualidade_pct: number;
+  eta_medio_seg: number;
+}
+
 export interface RotaResponse {
   id: number;
   drone_id: string;

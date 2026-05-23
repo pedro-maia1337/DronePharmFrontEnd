@@ -38,7 +38,7 @@ Este documento descreve os prompts de desenvolvimento organizados por área func
 
 ---
 
-## 2. Pedidos e Regras de Negócio
+## 2. Pedidos e Regras de Negócio - 
 
 ### 2.1 — Padronização de Decimais
 
@@ -52,9 +52,12 @@ Este documento descreve os prompts de desenvolvimento organizados por área func
 
   > ⚠️ **Atenção:** o `PedidoResponse` retorna `latitude` e `longitude` tanto na raiz quanto dentro de `coordenada{}`. Para consistência com o campo de entrada, usar sempre `coordenada` nas leituras também.
 
+
+----> Esta funcionando tudo de forma correta
+
 ---
 
-### 2.2 — Correção da Janela de Entrega Manual
+### 2.2 — Correção da Janela de Entrega Manual 
 
 **Objetivo:** Resolver o erro no backend que ocorre quando a janela de entrega é definida manualmente.
 
@@ -65,6 +68,12 @@ Este documento descreve os prompts de desenvolvimento organizados por área func
 - Adicionar bloco `try/except` no parse de datas para retornar mensagem de erro amigável ao frontend em caso de formato inválido.
 
   > ℹ️ Quando `janela_fim` não é informada, o backend a calcula automaticamente por prioridade: P1 = 1h, P2 = 4h, P3 = 24h. O fix de timezone deve preservar esse comportamento.
+
+
+
+----> quando eu coloquei o prompt deu erro de erro NetworkError when attempting to fetch resource, entao eu corrigi esse erro, se qualquer coisa der erro pode
+ser essa correção aqui
+
 
 ---
 
@@ -89,6 +98,10 @@ Este documento descreve os prompts de desenvolvimento organizados por área func
   > ⚠️ **Correção crítica:** o endpoint `GET /api/v1/pedidos/estatisticas` mencionado em versões anteriores deste documento **não existe** na API. Todos os dados de KPI devem vir exclusivamente de `/api/v1/historico/`.
 
   > ℹ️ **Limitação:** a média de consumo de bateria por entrega não está disponível diretamente no endpoint de histórico. Para calculá-la, é necessário cruzar dados de `GET /api/v1/telemetria/{drone_id}/historico` com os registros de entrega — o que aumenta a complexidade da implementação.
+
+
+----> O KPIs, foi implementado e esta tudo funcionando, no monitoramento as vezes da erro 404, testa ai
+para ver se o seu da o mesmo tipo de problema   
 
 ---
 

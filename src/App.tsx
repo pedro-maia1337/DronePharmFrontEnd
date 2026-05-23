@@ -32,6 +32,9 @@ const FormFarmacia = lazy(
 const FormDrone = lazy(
   () => import("@/features/drones/FormDrone"),
 );
+const KpiDashboard = lazy(
+  () => import("@/features/kpis/KpiDashboard"),
+);
 
 function getPedidoIdParamValue(pedidoIdParam: string | undefined): number {
   if (pedidoIdParam === undefined) {
@@ -101,6 +104,7 @@ export default function App(): ReactElement {
               <Route path="farmacias/:id/editar" element={<FormFarmacia />} />
               <Route path="drones" element={<ListaDrones />} />
               <Route path="drones/novo" element={<FormDrone />} />
+              <Route path="kpis" element={<KpiDashboard />} />
             </Route>
 
             <Route path="*" element={<NotFoundRoute />} />
