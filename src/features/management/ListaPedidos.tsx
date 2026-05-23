@@ -80,6 +80,7 @@ const LOAD_ERROR_MESSAGE = "Nao foi possivel carregar os pedidos.";
 const CANCEL_SUCCESS_MESSAGE = "Pedido cancelado com sucesso.";
 const CANCEL_ERROR_MESSAGE = "Nao foi possivel cancelar o pedido.";
 const ROTAS_PENDING_MESSAGE = "A tela de roteirizacao sera conectada na proxima etapa.";
+const WEIGHT_DECIMAL_PLACES = 2;
 
 type StatusFilterValue = "todos" | PedidoStatus;
 type PrioridadeFilterValue = "todas" | `${PrioridadeEnum}`;
@@ -120,7 +121,7 @@ function formatDateTime(value: string | null): string {
 }
 
 function formatPeso(pesoKg: number): string {
-  return `${pesoKg.toFixed(1)} kg`;
+  return `${pesoKg.toFixed(WEIGHT_DECIMAL_PLACES)} kg`;
 }
 
 function getPrioridadeConfig(prioridade: PrioridadeEnum): PrioridadeConfig {

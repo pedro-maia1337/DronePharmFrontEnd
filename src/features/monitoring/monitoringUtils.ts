@@ -93,7 +93,7 @@ function getDestination(
     return null;
   }
 
-  return [pedido.latitude, pedido.longitude];
+  return [pedido.coordenada.latitude, pedido.coordenada.longitude];
 }
 
 function getRoutePoints(

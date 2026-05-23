@@ -4,6 +4,8 @@ const PRIORIDADE_URGENTE = 1;
 const PRIORIDADE_NORMAL = 2;
 const PRIORIDADE_REABASTECIMENTO = 3;
 const PEDIDO_PESO_MAXIMO_KG = 2;
+const WEIGHT_DECIMAL_PLACES = 2;
+const WEIGHT_DECIMAL_FACTOR = 10 ** WEIGHT_DECIMAL_PLACES;
 const DESCRICAO_MAX_LENGTH = 300;
 const LATITUDE_MIN = -90;
 const LATITUDE_MAX = 90;
@@ -19,6 +21,12 @@ function isIsoDateTime(value: string): boolean {
 
 function hasAtMostCoordinateDecimalPlaces(value: number): boolean {
   const scaledValue = value * COORDINATE_DECIMAL_FACTOR;
+
+  return Math.abs(scaledValue - Math.round(scaledValue)) < FLOATING_POINT_TOLERANCE;
+}
+
+function hasAtMostWeightDecimalPlaces(value: number): boolean {
+  const scaledValue = value * WEIGHT_DECIMAL_FACTOR;
 
   return Math.abs(scaledValue - Math.round(scaledValue)) < FLOATING_POINT_TOLERANCE;
 }
@@ -53,7 +61,10 @@ export const pedidoItemSchema = z.object({
       error: "O peso deve ser um numero valido.",
     })
     .positive("O peso deve ser maior que zero.")
-    .max(PEDIDO_PESO_MAXIMO_KG, "O peso do pedido nao pode ultrapassar 2 kg."),
+    .max(PEDIDO_PESO_MAXIMO_KG, "O peso do pedido nao pode ultrapassar 2 kg.")
+    .refine(hasAtMostWeightDecimalPlaces, {
+      message: "O peso deve ter no maximo 2 casas decimais.",
+    }),
   prioridade: z.coerce.number().pipe(
     z.union(
       [

@@ -51,8 +51,11 @@ const QUERY_STALE_TIME = 30_000;
 const PEDIDOS_ROUTE_PATH = "/pedidos";
 const COORDINATE_DECIMAL_PLACES = 6;
 const COORDINATE_INPUT_STEP = "0.000001";
+const WEIGHT_DECIMAL_PLACES = 2;
+const WEIGHT_INPUT_STEP = "0.01";
 const DECIMAL_COORDINATE_HINT =
   "Use coordenadas decimais WGS84 com ate seis casas decimais.";
+const DECIMAL_WEIGHT_HINT = "Use peso em kg com ate duas casas decimais.";
 const DELIVERY_WINDOW_HINT =
   "Se nao for informada, a janela final sera calculada automaticamente pela prioridade.";
 const LOAD_ERROR_MESSAGE = "Nao foi possivel carregar as farmacias.";
@@ -147,8 +150,16 @@ function getFieldNameFromLocation(
   return null;
 }
 
-function roundCoordinate(value: number): number {
-  return Number(value.toFixed(COORDINATE_DECIMAL_PLACES));
+function normalizeDecimal(value: number, fractionDigits: number): number {
+  return Number.parseFloat(value.toFixed(fractionDigits));
+}
+
+function normalizeCoordinate(value: number): number {
+  return normalizeDecimal(value, COORDINATE_DECIMAL_PLACES);
+}
+
+function normalizeWeight(value: number): number {
+  return normalizeDecimal(value, WEIGHT_DECIMAL_PLACES);
 }
 
 function buildPedidoPayload(data: PedidoFormItemData): PedidoCreate {
@@ -157,10 +168,10 @@ function buildPedidoPayload(data: PedidoFormItemData): PedidoCreate {
 
   return {
     coordenada: {
-      latitude: roundCoordinate(data.latitude),
-      longitude: roundCoordinate(data.longitude),
+      latitude: normalizeCoordinate(data.latitude),
+      longitude: normalizeCoordinate(data.longitude),
     },
-    peso_kg: data.peso_kg,
+    peso_kg: normalizeWeight(data.peso_kg),
     prioridade: data.prioridade,
     descricao: descricao === undefined || descricao.length === 0 ? undefined : descricao,
     farmacia_id: data.farmacia_id,
@@ -420,8 +431,9 @@ export function FormPedido(): ReactElement {
                             label="Peso"
                             required
                             type="number"
-                            step="0.1"
+                            step={WEIGHT_INPUT_STEP}
                             suffix="kg"
+                            hint={DECIMAL_WEIGHT_HINT}
                             error={getFieldError(errors.pedidos?.[index]?.peso_kg)}
                             useDataFont
                             {...register(`pedidos.${index}.peso_kg`)}
