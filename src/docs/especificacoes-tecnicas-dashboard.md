@@ -66,3 +66,4 @@ Implementar um theme provider que suporte a alternância completa entre modo cla
 - Ajustar o contraste das camadas renderizadas a partir dos retornos em GeoJSON (depósito, pedidos e rotas).
 - No modo claro, as trajetórias (LineStrings) e os pontos de parada (Waypoints) devem adotar paletas de cores mais escuras ou contornos (strokes) de alto contraste.
 - Garantir que os ícones representativos da frota circulante e o marcador do depósito principal mantenham excelente visibilidade, independentemente do estilo de mapa base (base map) selecionado.
+- Especificar melhor os pontos de melhoria.
