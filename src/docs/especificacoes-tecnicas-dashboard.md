@@ -68,3 +68,24 @@ Implementar um theme provider que suporte a alternância completa entre modo cla
 - Garantir que os ícones representativos da frota circulante e o marcador do depósito principal mantenham excelente visibilidade, independentemente do estilo de mapa base (base map) selecionado.
 - Especificar melhor os pontos de melhoria.
 - Basear o design no preview contidos no docs
+
+## 4. Atualizar ORM
+
+Foi realizada uma alteração na estrutura do banco de dados: a tabela farmacias agora possui um novo campo obrigatório e único chamado cnpj (tipo texto, contendo os 14 dígitos numéricos do CNPJ).
+
+Comando usado para alteração: "ALTER TABLE farmacias 
+ADD COLUMN cnpj VARCHAR(14) NOT NULL UNIQUE;"
+
+Como a tabela foi limpa recentemente via TRUNCATE, não há registros antigos. Por favor, analise o projeto e atualize todas as camadas que foram impactadas por essa mudança. Isso inclui ajustar os Schemas de validação da API (criação, atualização e resposta), os modelos/entidades do ORM, os repositórios de banco de dados e as rotas (routers) que gerenciam o CRUD de farmácias. Certifique-se de que o novo campo seja validado e retornado corretamente pelos endpoints."
+
+## 5. Atualizar Casas Decimais 
+
+"Por favor, atualize os formulários da aplicação (tanto no cadastro de farmácias quanto na criação de pedidos) para garantir que os campos de entrada de latitude e longitude suportem e aceitem alta precisão, permitindo a digitação ou colagem de valores com até 15 casas decimais.
+
+Certifique-se de ajustar os seguintes pontos no Frontend:
+
+Atributos de Input: Verifique se os componentes de input numérico não possuem a propriedade step travada em poucas casas decimais (caso use o input nativo do HTML, utilize step="any" ou configure o componente para alta precisão).
+
+Validações no Client-side: Ajuste qualquer validação (Regex, Yup, Zod, etc.) que limite o comprimento do número de casas decimais para que ela passe a aceitar até 15 dígitos após a vírgula/ponto.
+
+Preservação do dado: Garanta que, ao enviar o payload HTTP (JSON), o valor de ponto flutuante não seja arredondado prematuramente no momento da captura do formulário."
