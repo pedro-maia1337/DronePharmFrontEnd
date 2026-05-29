@@ -24,6 +24,7 @@ import type {
 import {
   farmaciaSchema,
   type FarmaciaFormData,
+  type FarmaciaFormInput,
 } from "./farmaciaSchema";
 import { useFarmaciasStore } from "./store/useFarmaciasStore";
 
@@ -63,7 +64,8 @@ const QUERY_STALE_TIME = 10_000;
 const CNPJ_HINT = "Informe apenas os 14 digitos numericos do CNPJ.";
 const UF_HINT = "Use a sigla da unidade federativa, como MG ou SP.";
 const DECIMAL_COORDINATE_HINT =
-  "Use coordenadas decimais WGS84 com ate quatro casas decimais.";
+  "Use coordenadas decimais WGS84 com ate 15 casas decimais.";
+const COORDINATE_INPUT_MODE = "decimal";
 const CREATE_MODE_TITLE = "Nova Farmacia";
 const EDIT_MODE_TITLE = "Editar Farmacia";
 const CREATE_MODE_DESCRIPTION =
@@ -140,15 +142,15 @@ function getErrorMessage(error: unknown): string {
   return GENERIC_ERROR_MESSAGE;
 }
 
-function getDefaultValues(): FarmaciaFormData {
+function getDefaultValues(): FarmaciaFormInput {
   return {
     cnpj: "",
     nome: "",
     endereco: "",
     cidade: "",
     uf: "",
-    latitude: 0,
-    longitude: 0,
+    latitude: "",
+    longitude: "",
     deposito: false,
     ativa: true,
   };
@@ -156,15 +158,15 @@ function getDefaultValues(): FarmaciaFormData {
 
 function getEditFormValues(
   farmacia: Awaited<ReturnType<typeof getFarmacia>>,
-): FarmaciaFormData {
+): FarmaciaFormInput {
   return {
     cnpj: farmacia.cnpj,
     nome: farmacia.nome,
     endereco: farmacia.endereco,
     cidade: farmacia.cidade,
     uf: farmacia.uf,
-    latitude: farmacia.latitude,
-    longitude: farmacia.longitude,
+    latitude: String(farmacia.latitude),
+    longitude: String(farmacia.longitude),
     deposito: farmacia.deposito,
     ativa: farmacia.ativa,
   };
@@ -285,7 +287,7 @@ export function FormFarmacia(): ReactElement {
     reset,
     setError,
     formState: { errors, isSubmitting },
-  } = useForm<FarmaciaFormData>({
+  } = useForm<FarmaciaFormInput, undefined, FarmaciaFormData>({
     resolver: zodResolver(farmaciaSchema),
     defaultValues: getDefaultValues(),
   });
@@ -469,24 +471,24 @@ export function FormFarmacia(): ReactElement {
               <FormInput
                 label="Latitude"
                 required
-                type="number"
-                step="0.0001"
+                type="text"
+                inputMode={COORDINATE_INPUT_MODE}
                 suffix="°"
                 error={errors.latitude}
                 hint={DECIMAL_COORDINATE_HINT}
                 useDataFont
-                {...register("latitude", { valueAsNumber: true })}
+                {...register("latitude")}
               />
               <FormInput
                 label="Longitude"
                 required
-                type="number"
-                step="0.0001"
+                type="text"
+                inputMode={COORDINATE_INPUT_MODE}
                 suffix="°"
                 error={errors.longitude}
                 hint={DECIMAL_COORDINATE_HINT}
                 useDataFont
-                {...register("longitude", { valueAsNumber: true })}
+                {...register("longitude")}
               />
             </div>
           </section>

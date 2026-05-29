@@ -49,12 +49,11 @@ const FOOTER_ACTIONS_CLASS_NAME = "flex items-center justify-between gap-3";
 const BATCH_ACTIONS_CLASS_NAME = "flex items-center justify-between gap-3";
 const QUERY_STALE_TIME = 30_000;
 const PEDIDOS_ROUTE_PATH = "/pedidos";
-const COORDINATE_DECIMAL_PLACES = 6;
-const COORDINATE_INPUT_STEP = "0.000001";
+const COORDINATE_INPUT_MODE = "decimal";
 const WEIGHT_DECIMAL_PLACES = 2;
 const WEIGHT_INPUT_STEP = "0.01";
 const DECIMAL_COORDINATE_HINT =
-  "Use coordenadas decimais WGS84 com ate seis casas decimais.";
+  "Use coordenadas decimais WGS84 com ate 15 casas decimais.";
 const DECIMAL_WEIGHT_HINT = "Use peso em kg com ate duas casas decimais.";
 const DELIVERY_WINDOW_HINT =
   "Se nao for informada, a janela final sera calculada automaticamente pela prioridade.";
@@ -154,10 +153,6 @@ function normalizeDecimal(value: number, fractionDigits: number): number {
   return Number.parseFloat(value.toFixed(fractionDigits));
 }
 
-function normalizeCoordinate(value: number): number {
-  return normalizeDecimal(value, COORDINATE_DECIMAL_PLACES);
-}
-
 function normalizeWeight(value: number): number {
   return normalizeDecimal(value, WEIGHT_DECIMAL_PLACES);
 }
@@ -168,8 +163,8 @@ function buildPedidoPayload(data: PedidoFormItemData): PedidoCreate {
 
   return {
     coordenada: {
-      latitude: normalizeCoordinate(data.latitude),
-      longitude: normalizeCoordinate(data.longitude),
+      latitude: data.latitude,
+      longitude: data.longitude,
     },
     peso_kg: normalizeWeight(data.peso_kg),
     prioridade: data.prioridade,
@@ -402,8 +397,8 @@ export function FormPedido(): ReactElement {
                           <FormInput
                             label="Latitude"
                             required
-                            type="number"
-                            step={COORDINATE_INPUT_STEP}
+                            type="text"
+                            inputMode={COORDINATE_INPUT_MODE}
                             suffix="°"
                             hint={DECIMAL_COORDINATE_HINT}
                             error={getFieldError(errors.pedidos?.[index]?.latitude)}
@@ -413,8 +408,8 @@ export function FormPedido(): ReactElement {
                           <FormInput
                             label="Longitude"
                             required
-                            type="number"
-                            step={COORDINATE_INPUT_STEP}
+                            type="text"
+                            inputMode={COORDINATE_INPUT_MODE}
                             suffix="°"
                             hint={DECIMAL_COORDINATE_HINT}
                             error={getFieldError(errors.pedidos?.[index]?.longitude)}

@@ -11,24 +11,47 @@ const LATITUDE_MIN = -90;
 const LATITUDE_MAX = 90;
 const LONGITUDE_MIN = -180;
 const LONGITUDE_MAX = 180;
-const COORDINATE_DECIMAL_PLACES = 6;
-const COORDINATE_DECIMAL_FACTOR = 10 ** COORDINATE_DECIMAL_PLACES;
+const COORDINATE_DECIMAL_PLACES = 15;
 const FLOATING_POINT_TOLERANCE = 1e-8;
+const COORDINATE_PATTERN = new RegExp(
+  `^-?\\d+(?:[\\.,]\\d{1,${COORDINATE_DECIMAL_PLACES}})?$`,
+);
 
 function isIsoDateTime(value: string): boolean {
   return !Number.isNaN(Date.parse(value));
-}
-
-function hasAtMostCoordinateDecimalPlaces(value: number): boolean {
-  const scaledValue = value * COORDINATE_DECIMAL_FACTOR;
-
-  return Math.abs(scaledValue - Math.round(scaledValue)) < FLOATING_POINT_TOLERANCE;
 }
 
 function hasAtMostWeightDecimalPlaces(value: number): boolean {
   const scaledValue = value * WEIGHT_DECIMAL_FACTOR;
 
   return Math.abs(scaledValue - Math.round(scaledValue)) < FLOATING_POINT_TOLERANCE;
+}
+
+function parseCoordinate(value: string): number {
+  return Number(value.replace(",", "."));
+}
+
+function createCoordinateSchema(
+  minValue: number,
+  maxValue: number,
+  fieldLabel: string,
+) {
+  const rangeMessage = `A ${fieldLabel} deve estar entre ${minValue} e ${maxValue}.`;
+  const precisionMessage = `A ${fieldLabel} deve ter no maximo ${COORDINATE_DECIMAL_PLACES} casas decimais.`;
+
+  return z
+    .string()
+    .trim()
+    .refine((value) => COORDINATE_PATTERN.test(value), {
+      message: precisionMessage,
+    })
+    .transform(parseCoordinate)
+    .refine((value) => Number.isFinite(value), {
+      message: `A ${fieldLabel} deve ser um numero valido.`,
+    })
+    .refine((value) => value >= minValue && value <= maxValue, {
+      message: rangeMessage,
+    });
 }
 
 export const pedidoItemSchema = z.object({
@@ -38,24 +61,8 @@ export const pedidoItemSchema = z.object({
     })
     .int("A farmacia de origem deve ser um numero inteiro.")
     .positive("Selecione uma farmacia de origem valida."),
-  latitude: z
-    .coerce.number({
-      error: "A latitude deve ser um numero valido.",
-    })
-    .min(LATITUDE_MIN, "A latitude deve estar entre -90 e 90.")
-    .max(LATITUDE_MAX, "A latitude deve estar entre -90 e 90.")
-    .refine(hasAtMostCoordinateDecimalPlaces, {
-      message: "A latitude deve ter no maximo 6 casas decimais.",
-    }),
-  longitude: z
-    .coerce.number({
-      error: "A longitude deve ser um numero valido.",
-    })
-    .min(LONGITUDE_MIN, "A longitude deve estar entre -180 e 180.")
-    .max(LONGITUDE_MAX, "A longitude deve estar entre -180 e 180.")
-    .refine(hasAtMostCoordinateDecimalPlaces, {
-      message: "A longitude deve ter no maximo 6 casas decimais.",
-    }),
+  latitude: createCoordinateSchema(LATITUDE_MIN, LATITUDE_MAX, "latitude"),
+  longitude: createCoordinateSchema(LONGITUDE_MIN, LONGITUDE_MAX, "longitude"),
   peso_kg: z
     .coerce.number({
       error: "O peso deve ser um numero valido.",
