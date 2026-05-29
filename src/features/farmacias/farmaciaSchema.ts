@@ -5,12 +5,20 @@ const NOME_MAX_LENGTH = 120;
 const CIDADE_MIN_LENGTH = 2;
 const CIDADE_MAX_LENGTH = 80;
 const TELEFONE_MAX_LENGTH = 20;
+const CNPJ_LENGTH = 14;
 const LATITUDE_MIN = -90;
 const LATITUDE_MAX = 90;
 const LONGITUDE_MIN = -180;
 const LONGITUDE_MAX = 180;
 
 export const farmaciaSchema = z.object({
+  cnpj: z
+    .string()
+    .trim()
+    .regex(
+      new RegExp(`^\\d{${CNPJ_LENGTH}}$`),
+      "O CNPJ deve conter exatamente 14 dígitos numéricos."
+    ),
   nome: z
     .string()
     .trim()

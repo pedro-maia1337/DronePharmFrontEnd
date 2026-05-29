@@ -169,6 +169,7 @@ export interface DroneListResponse {
 }
 
 export interface FarmaciaCreate {
+  cnpj: string;
   nome: string;
   latitude: number;
   longitude: number;
@@ -179,6 +180,7 @@ export interface FarmaciaCreate {
 }
 
 export interface FarmaciaUpdate {
+  cnpj?: string | null;
   nome?: string | null;
   endereco?: string | null;
   cidade?: string | null;
@@ -189,6 +191,7 @@ export interface FarmaciaUpdate {
 
 export interface FarmaciaResponse {
   id: number;
+  cnpj: string;
   nome: string;
   latitude: number;
   longitude: number;

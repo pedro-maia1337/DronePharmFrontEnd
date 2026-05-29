@@ -16,7 +16,10 @@ import { FormInput } from "@/components/ui/FormInput";
 import { FormSkeleton } from "@/components/ui/FormSkeleton";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { FarmaciaCreate, HTTPValidationError } from "@/types/api";
+import type {
+  FarmaciaCreate,
+  HTTPValidationError,
+} from "@/types/api";
 
 import {
   farmaciaSchema,
@@ -57,6 +60,7 @@ const ROOT_ERROR_CLASS_NAME =
 const FOOTER_ACTIONS_CLASS_NAME =
   "flex items-center justify-end gap-3";
 const QUERY_STALE_TIME = 10_000;
+const CNPJ_HINT = "Informe apenas os 14 digitos numericos do CNPJ.";
 const DECIMAL_COORDINATE_HINT =
   "Use coordenadas decimais WGS84 com ate quatro casas decimais.";
 const CREATE_MODE_TITLE = "Nova Farmacia";
@@ -74,6 +78,7 @@ const MANAGEMENT_ROUTE_PATH = "/farmacias";
 type FarmaciaFieldName = keyof FarmaciaFormData;
 
 const FORM_FIELD_NAMES: FarmaciaFieldName[] = [
+  "cnpj",
   "nome",
   "cidade",
   "latitude",
@@ -134,6 +139,7 @@ function getErrorMessage(error: unknown): string {
 
 function getDefaultValues(): FarmaciaFormData {
   return {
+    cnpj: "",
     nome: "",
     cidade: "",
     latitude: 0,
@@ -147,6 +153,7 @@ function getEditFormValues(
   farmacia: Awaited<ReturnType<typeof getFarmacia>>,
 ): FarmaciaFormData {
   return {
+    cnpj: farmacia.cnpj,
     nome: farmacia.nome,
     cidade: farmacia.cidade,
     latitude: farmacia.latitude,
@@ -156,11 +163,18 @@ function getEditFormValues(
   };
 }
 
+type FarmaciaEditPayload = FarmaciaCreate & {
+  ativa: boolean;
+};
+
+function getFarmaciaPayload(data: FarmaciaFormData, isEditMode: false): FarmaciaCreate;
+function getFarmaciaPayload(data: FarmaciaFormData, isEditMode: true): FarmaciaEditPayload;
 function getFarmaciaPayload(
   data: FarmaciaFormData,
   isEditMode: boolean,
-): FarmaciaCreate | { nome: string; cidade: string; latitude: number; longitude: number; ativa: boolean } {
+): FarmaciaCreate | FarmaciaEditPayload {
   const basePayload = {
+    cnpj: data.cnpj,
     nome: data.nome,
     cidade: data.cidade,
     latitude: data.latitude,
@@ -374,6 +388,19 @@ export function FormFarmacia(): ReactElement {
           <section className={CARD_CLASS_NAME}>
             <h2 className={CARD_TITLE_CLASS_NAME}>Identificacao</h2>
             <div className="flex flex-col gap-4">
+              <FormInput
+                label="CNPJ"
+                required
+                error={errors.cnpj}
+                placeholder="00000000000000"
+                inputMode="numeric"
+                maxLength={14}
+                autoComplete="off"
+                hint={CNPJ_HINT}
+                useDataFont
+                {...register("cnpj")}
+              />
+
               <FormInput
                 label="Nome"
                 required
