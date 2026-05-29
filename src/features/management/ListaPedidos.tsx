@@ -358,12 +358,10 @@ export function ListaPedidos(): ReactElement {
       return;
     }
 
-    setFarmacias(farmaciasQuery.data.farmacias);
+    setFarmacias(
+      farmaciasQuery.data.farmacias.filter((farmacia) => farmacia.ativa),
+    );
   }, [farmaciasQuery.data, setFarmacias]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter, prioridadeFilter, farmaciaFilter]);
 
   const farmaciasMap = useMemo(
     () => new Map(farmacias.map((farmacia) => [farmacia.id, farmacia])),
@@ -435,18 +433,22 @@ export function ListaPedidos(): ReactElement {
 
   function handleSearchChange(event: ChangeEvent<HTMLInputElement>): void {
     setSearchTerm(event.target.value);
+    setCurrentPage(1);
   }
 
   function handleStatusChange(event: ChangeEvent<HTMLSelectElement>): void {
     setStatusFilter(event.target.value as StatusFilterValue);
+    setCurrentPage(1);
   }
 
   function handlePrioridadeChange(event: ChangeEvent<HTMLSelectElement>): void {
     setPrioridadeFilter(event.target.value as PrioridadeFilterValue);
+    setCurrentPage(1);
   }
 
   function handleFarmaciaChange(event: ChangeEvent<HTMLSelectElement>): void {
     setFarmaciaFilter(event.target.value as FarmaciaFilterValue);
+    setCurrentPage(1);
   }
 
   if (pedidosQuery.isLoading) {

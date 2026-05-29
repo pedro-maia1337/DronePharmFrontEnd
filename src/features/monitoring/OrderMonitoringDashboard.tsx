@@ -71,6 +71,7 @@ interface RoutePedidoStatusItem {
 
 interface RefreshQueriesOptions {
   includePedidoAtivo?: boolean;
+  includeHistoricoKpis?: boolean;
 }
 
 interface MonitoringUiState {
@@ -372,12 +373,18 @@ export function OrderMonitoringDashboard({
     queryKey: ["mapa", "snapshot"],
     queryFn: getMapaSnapshot,
     staleTime: QUERY_STALE_TIME,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: QUERY_STALE_TIME,
   });
   const depositoQuery = useQuery({
     queryKey: ["farmacias", "deposito"],
     queryFn: getDepositoFarmacia,
     staleTime: QUERY_STALE_TIME,
     retry: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: QUERY_STALE_TIME,
   });
   const rotaQuery = useQuery({
     queryKey: ["rota", pedidoQuery.data?.rota_id],
@@ -398,6 +405,10 @@ export function OrderMonitoringDashboard({
       pedidoQuery.data?.status === "pendente" ||
       pedidoQuery.data?.status === "calculado",
   });
+  const depositoAtual = depositoQuery.isSuccess ? depositoQuery.data ?? null : null;
+  const mapaSnapshotAtual = mapaSnapshotQuery.isSuccess
+    ? mapaSnapshotQuery.data ?? null
+    : null;
   const routePedidoIds = useMemo(() => {
     const ids = rotaQuery.data?.pedido_ids ?? [];
 
@@ -433,14 +444,14 @@ export function OrderMonitoringDashboard({
   }, [monitoringUiState.statusOverride, snapshot]);
   const geoJsonSnapshot = useMemo(() => {
     return buildMonitoringGeoJsonSnapshot(
-      mapaSnapshotQuery.data ?? null,
+      mapaSnapshotAtual,
       pedidoId,
       pedidoQuery.data?.rota_id ?? null,
       effectiveSnapshot?.droneId ?? rotaQuery.data?.drone_id ?? selectedDroneId,
     );
   }, [
     effectiveSnapshot?.droneId,
-    mapaSnapshotQuery.data,
+    mapaSnapshotAtual,
     pedidoId,
     pedidoQuery.data?.rota_id,
     rotaQuery.data?.drone_id,
@@ -599,7 +610,7 @@ export function OrderMonitoringDashboard({
     effectiveSnapshot?.status === "calculado" &&
     pedidoQuery.data?.rota_id !== null &&
     pedidoQuery.data?.rota_id !== undefined;
-  const depositoDisponivel = depositoQuery.data !== undefined;
+  const depositoDisponivel = depositoAtual !== null;
   const depositoBloqueado = depositoQuery.isError && isNotFoundError(depositoQuery.error);
   const routeCalculationBlockedReason = depositoBloqueado
     ? "Nenhum deposito ativo cadastrado. Reative ou crie a farmacia-polo antes de calcular rotas."
@@ -615,7 +626,7 @@ export function OrderMonitoringDashboard({
   const activeRotaId = pedidoAtivoQuery.data?.rota_id ?? pedidoQuery.data?.rota_id ?? null;
   const refreshQueries = useCallback(
     async (options: RefreshQueriesOptions = {}): Promise<void> => {
-      const { includePedidoAtivo = true } = options;
+      const { includePedidoAtivo = true, includeHistoricoKpis = false } = options;
       const invalidations: Promise<unknown>[] = [
         queryClient.invalidateQueries({ queryKey: ["pedido", pedidoId] }),
         queryClient.invalidateQueries({ queryKey: ["rota"] }),
@@ -626,6 +637,12 @@ export function OrderMonitoringDashboard({
       if (includePedidoAtivo) {
         invalidations.push(
           queryClient.invalidateQueries({ queryKey: ["pedido-ativo", pedidoId] }),
+        );
+      }
+
+      if (includeHistoricoKpis) {
+        invalidations.push(
+          queryClient.invalidateQueries({ queryKey: ["historico"] }),
         );
       }
 
@@ -720,7 +737,7 @@ export function OrderMonitoringDashboard({
       window.setTimeout(() => {
         dispatchMonitoringUi({ type: "hide_completion_banner" });
       }, COMPLETION_BANNER_DURATION_MS);
-      void refreshQueries({ includePedidoAtivo: false });
+      void refreshQueries({ includePedidoAtivo: false, includeHistoricoKpis: true });
     }
 
     if (nextStatus === "cancelado" || nextStatus === "falha" || nextStatus === "pendente") {
@@ -847,7 +864,7 @@ export function OrderMonitoringDashboard({
   async function handleEntregar(): Promise<void> {
     try {
       await entregarPedido(pedidoId);
-      await refreshQueries();
+      await refreshQueries({ includeHistoricoKpis: true });
       toast.success("Entrega confirmada com sucesso.");
     } catch (error) {
       toast.error(getErrorMessage(error));

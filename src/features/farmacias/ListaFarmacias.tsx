@@ -7,7 +7,7 @@ import {
   type ReactElement,
 } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -72,10 +72,14 @@ const STATUS_ACTIVE_CLASS_NAME =
   "border-transparent bg-[var(--status-ok-bg)] text-[var(--status-ok)]";
 const STATUS_INACTIVE_CLASS_NAME =
   "border-transparent bg-[var(--status-neutral-bg)] text-[var(--status-neutral)]";
+const STATUS_DEPOSIT_CLASS_NAME =
+  "border-transparent bg-[rgba(59,130,246,0.14)] text-[rgb(37,99,235)]";
 const DIALOG_CONTENT_CLASS_NAME =
   "border border-[var(--surface-border)] bg-[var(--surface-card)] text-[var(--text-primary)]";
 const DIALOG_FOOTER_CLASS_NAME =
   "border-[var(--surface-border)] bg-[var(--surface-panel)]";
+const DEPOSIT_WARNING_MESSAGE =
+  "A farmacia-polo nao pode ser desativada. Reative outra unidade para assumir o deposito, se necessario.";
 const SEARCH_PLACEHOLDER = "Buscar por nome ou cidade";
 const EMPTY_STATE_MESSAGE = "Nenhuma farmacia cadastrada";
 const LOAD_ERROR_MESSAGE = "Nao foi possivel carregar as farmacias.";
@@ -103,6 +107,14 @@ function getStatusLabel(ativa: boolean): string {
   return ativa ? "Ativa" : "Inativa";
 }
 
+function getDepositBadgeClassName(deposito: boolean): string | null {
+  return deposito ? STATUS_DEPOSIT_CLASS_NAME : null;
+}
+
+function getDepositLabel(deposito: boolean): string | null {
+  return deposito ? "Depósito" : null;
+}
+
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -128,11 +140,17 @@ function FarmaciaRowComponent({
       <td className={cn(BODY_CELL_CLASS_NAME, DATA_FONT_CLASS_NAME)}>
         {formatCoordinates(farmacia.latitude, farmacia.longitude)}
       </td>
-      <td className={BODY_CELL_CLASS_NAME}>-</td>
       <td className={BODY_CELL_CLASS_NAME}>
-        <Badge className={getStatusBadgeClassName(farmacia.ativa)}>
-          {getStatusLabel(farmacia.ativa)}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge className={getStatusBadgeClassName(farmacia.ativa)}>
+            {getStatusLabel(farmacia.ativa)}
+          </Badge>
+          {farmacia.deposito ? (
+            <Badge className={getDepositBadgeClassName(farmacia.deposito) ?? undefined}>
+              {getDepositLabel(farmacia.deposito)}
+            </Badge>
+          ) : null}
+        </div>
       </td>
       <td className={cn(BODY_CELL_CLASS_NAME, "text-right")}>
         <div className="flex items-center justify-end gap-2">
@@ -140,7 +158,7 @@ function FarmaciaRowComponent({
             <Link to={`/farmacias/${farmacia.id}/editar`}>Editar</Link>
           </Button>
 
-          {farmacia.ativa ? (
+          {farmacia.ativa && !farmacia.deposito ? (
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="destructive" size="sm">
@@ -173,6 +191,10 @@ function FarmaciaRowComponent({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+          ) : farmacia.ativa && farmacia.deposito ? (
+            <Button variant="destructive" size="sm" disabled title={DEPOSIT_WARNING_MESSAGE}>
+              Desativar
+            </Button>
           ) : (
             <Button
               size="sm"
@@ -198,6 +220,7 @@ const FarmaciaRow = memo(
 );
 
 export function ListaFarmacias(): ReactElement {
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("todas");
   const [currentPage, setCurrentPage] = useState(1);
@@ -216,12 +239,10 @@ export function ListaFarmacias(): ReactElement {
       return;
     }
 
-    setFarmacias(farmaciasQuery.data.farmacias);
+    setFarmacias(
+      farmaciasQuery.data.farmacias.filter((farmacia) => farmacia.ativa),
+    );
   }, [farmaciasQuery.data, setFarmacias]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter]);
 
   async function handleReativar(farmacia: FarmaciaResponse): Promise<void> {
     try {
@@ -230,6 +251,11 @@ export function ListaFarmacias(): ReactElement {
       });
 
       atualizarFarmaciaStore(farmaciaAtualizada);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["farmacias"] }),
+        queryClient.invalidateQueries({ queryKey: ["farmacias", "deposito"] }),
+        queryClient.invalidateQueries({ queryKey: ["mapa", "snapshot"] }),
+      ]);
       toast.success(REACTIVATE_SUCCESS_MESSAGE);
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -240,6 +266,11 @@ export function ListaFarmacias(): ReactElement {
     try {
       await desativarFarmacia(farmacia.id);
       removerFarmaciaStore(farmacia.id);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["farmacias"] }),
+        queryClient.invalidateQueries({ queryKey: ["farmacias", "deposito"] }),
+        queryClient.invalidateQueries({ queryKey: ["mapa", "snapshot"] }),
+      ]);
       toast.success(DEACTIVATE_SUCCESS_MESSAGE);
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -248,10 +279,12 @@ export function ListaFarmacias(): ReactElement {
 
   function handleSearchChange(event: ChangeEvent<HTMLInputElement>): void {
     setSearchTerm(event.target.value);
+    setCurrentPage(1);
   }
 
   function handleStatusChange(event: ChangeEvent<HTMLSelectElement>): void {
     setStatusFilter(event.target.value as StatusFilterValue);
+    setCurrentPage(1);
   }
 
   const filteredFarmacias = useMemo(() => {
@@ -391,7 +424,7 @@ export function ListaFarmacias(): ReactElement {
                     <th className={HEAD_CELL_CLASS_NAME}>Telefone</th>
                     <th className={HEAD_CELL_CLASS_NAME}>Status</th>
                     <th className={cn(HEAD_CELL_CLASS_NAME, "text-right")}>
-                      Acoes
+                      Operacao
                     </th>
                   </tr>
                 </thead>

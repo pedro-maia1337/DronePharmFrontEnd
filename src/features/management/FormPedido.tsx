@@ -231,7 +231,9 @@ export function FormPedido(): ReactElement {
       return;
     }
 
-    setFarmacias(farmaciasQuery.data.farmacias);
+    setFarmacias(
+      farmaciasQuery.data.farmacias.filter((farmacia) => farmacia.ativa),
+    );
   }, [farmaciasQuery.data, setFarmacias]);
 
   const farmaciasAtivasOptions = useMemo(

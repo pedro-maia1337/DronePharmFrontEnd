@@ -1,7 +1,7 @@
 import { useEffect, type ReactElement } from "react";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -61,6 +61,7 @@ const FOOTER_ACTIONS_CLASS_NAME =
   "flex items-center justify-end gap-3";
 const QUERY_STALE_TIME = 10_000;
 const CNPJ_HINT = "Informe apenas os 14 digitos numericos do CNPJ.";
+const UF_HINT = "Use a sigla da unidade federativa, como MG ou SP.";
 const DECIMAL_COORDINATE_HINT =
   "Use coordenadas decimais WGS84 com ate quatro casas decimais.";
 const CREATE_MODE_TITLE = "Nova Farmacia";
@@ -80,10 +81,12 @@ type FarmaciaFieldName = keyof FarmaciaFormData;
 const FORM_FIELD_NAMES: FarmaciaFieldName[] = [
   "cnpj",
   "nome",
+  "endereco",
   "cidade",
+  "uf",
   "latitude",
   "longitude",
-  "telefone",
+  "deposito",
   "ativa",
 ];
 
@@ -141,10 +144,12 @@ function getDefaultValues(): FarmaciaFormData {
   return {
     cnpj: "",
     nome: "",
+    endereco: "",
     cidade: "",
+    uf: "",
     latitude: 0,
     longitude: 0,
-    telefone: "",
+    deposito: false,
     ativa: true,
   };
 }
@@ -155,10 +160,12 @@ function getEditFormValues(
   return {
     cnpj: farmacia.cnpj,
     nome: farmacia.nome,
+    endereco: farmacia.endereco,
     cidade: farmacia.cidade,
+    uf: farmacia.uf,
     latitude: farmacia.latitude,
     longitude: farmacia.longitude,
-    telefone: "",
+    deposito: farmacia.deposito,
     ativa: farmacia.ativa,
   };
 }
@@ -176,9 +183,12 @@ function getFarmaciaPayload(
   const basePayload = {
     cnpj: data.cnpj,
     nome: data.nome,
+    endereco: data.endereco,
     cidade: data.cidade,
+    uf: data.uf,
     latitude: data.latitude,
     longitude: data.longitude,
+    deposito: data.deposito,
   };
 
   if (!isEditMode) {
@@ -261,6 +271,7 @@ function renderQueryError(message: string): ReactElement {
 
 export function FormFarmacia(): ReactElement {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { id } = useParams<{ id?: string }>();
   const farmaciaId = parseFarmaciaId(id);
   const isEditMode = id !== undefined;
@@ -309,6 +320,11 @@ export function FormFarmacia(): ReactElement {
           getFarmaciaPayload(data, true)
         );
 
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["farmacias"] }),
+          queryClient.invalidateQueries({ queryKey: ["farmacias", "deposito"] }),
+          queryClient.invalidateQueries({ queryKey: ["mapa", "snapshot"] }),
+        ]);
         atualizarFarmaciaStore(farmaciaAtualizada);
         toast.success(getSuccessMessage(true));
         navigate(MANAGEMENT_ROUTE_PATH);
@@ -317,6 +333,11 @@ export function FormFarmacia(): ReactElement {
 
       const farmaciaCriada = await criarFarmacia(getFarmaciaPayload(data, false));
 
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["farmacias"] }),
+        queryClient.invalidateQueries({ queryKey: ["farmacias", "deposito"] }),
+        queryClient.invalidateQueries({ queryKey: ["mapa", "snapshot"] }),
+      ]);
       adicionarFarmacia(farmaciaCriada);
       toast.success(getSuccessMessage(false));
       navigate(MANAGEMENT_ROUTE_PATH);
@@ -394,7 +415,6 @@ export function FormFarmacia(): ReactElement {
                 error={errors.cnpj}
                 placeholder="00000000000000"
                 inputMode="numeric"
-                maxLength={14}
                 autoComplete="off"
                 hint={CNPJ_HINT}
                 useDataFont
@@ -410,6 +430,15 @@ export function FormFarmacia(): ReactElement {
                 {...register("nome")}
               />
 
+              <FormInput
+                label="Endereco"
+                required
+                error={errors.endereco}
+                placeholder="Av. Afonso Pena, 1234"
+                autoComplete="off"
+                {...register("endereco")}
+              />
+
               <div className={GRID_TWO_COLUMNS_CLASS_NAME}>
                 <FormInput
                   label="Cidade"
@@ -420,12 +449,15 @@ export function FormFarmacia(): ReactElement {
                   {...register("cidade")}
                 />
                 <FormInput
-                  label="Telefone"
-                  error={errors.telefone}
-                  placeholder="(31) 3333-3333"
+                  label="UF"
+                  required
+                  error={errors.uf}
+                  placeholder="MG"
+                  maxLength={2}
                   autoComplete="off"
+                  hint={UF_HINT}
                   useDataFont
-                  {...register("telefone")}
+                  {...register("uf")}
                 />
               </div>
             </div>
@@ -462,44 +494,85 @@ export function FormFarmacia(): ReactElement {
           <section className={CARD_CLASS_NAME}>
             <h2 className={CARD_TITLE_CLASS_NAME}>Configuracoes</h2>
 
-            <Controller
-              name="ativa"
-              control={control}
-              render={({ field, fieldState }) => (
-                <div className="flex flex-col gap-2">
-                  <div
-                    className={cn(
-                      SWITCH_ROW_CLASS_NAME,
-                      fieldState.error
-                        ? "border-[var(--status-danger)]"
-                        : undefined
-                    )}
-                  >
-                    <div className="flex flex-col gap-1">
-                      <span className={SWITCH_LABEL_TITLE_CLASS_NAME}>
-                        Farmacia ativa
-                      </span>
-                      <span className={SWITCH_LABEL_DESCRIPTION_CLASS_NAME}>
-                        Mantem a unidade disponivel para operacao e origem de pedidos.
-                      </span>
+            <div className="flex flex-col gap-4">
+              <Controller
+                name="deposito"
+                control={control}
+                render={({ field, fieldState }) => (
+                  <div className="flex flex-col gap-2">
+                    <div
+                      className={cn(
+                        SWITCH_ROW_CLASS_NAME,
+                        fieldState.error
+                          ? "border-[var(--status-danger)]"
+                          : undefined
+                      )}
+                    >
+                      <div className="flex flex-col gap-1">
+                        <span className={SWITCH_LABEL_TITLE_CLASS_NAME}>
+                          Farmacia deposito
+                        </span>
+                        <span className={SWITCH_LABEL_DESCRIPTION_CLASS_NAME}>
+                          Define a unidade como polo principal de operacao.
+                        </span>
+                      </div>
+
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        aria-invalid={fieldState.error ? "true" : "false"}
+                        className="data-checked:bg-[var(--accent)] data-unchecked:bg-[var(--surface-border)]"
+                      />
                     </div>
 
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      aria-invalid={fieldState.error ? "true" : "false"}
-                      className="data-checked:bg-[var(--accent)] data-unchecked:bg-[var(--surface-border)]"
-                    />
+                    {fieldState.error ? (
+                      <p role="alert" className="text-xs text-[var(--status-danger)]">
+                        {fieldState.error.message}
+                      </p>
+                    ) : null}
                   </div>
+                )}
+              />
 
-                  {fieldState.error ? (
-                    <p role="alert" className="text-xs text-[var(--status-danger)]">
-                      {fieldState.error.message}
-                    </p>
-                  ) : null}
-                </div>
-              )}
-            />
+              <Controller
+                name="ativa"
+                control={control}
+                render={({ field, fieldState }) => (
+                  <div className="flex flex-col gap-2">
+                    <div
+                      className={cn(
+                        SWITCH_ROW_CLASS_NAME,
+                        fieldState.error
+                          ? "border-[var(--status-danger)]"
+                          : undefined
+                      )}
+                    >
+                      <div className="flex flex-col gap-1">
+                        <span className={SWITCH_LABEL_TITLE_CLASS_NAME}>
+                          Farmacia ativa
+                        </span>
+                        <span className={SWITCH_LABEL_DESCRIPTION_CLASS_NAME}>
+                          Mantem a unidade disponivel para operacao e origem de pedidos.
+                        </span>
+                      </div>
+
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        aria-invalid={fieldState.error ? "true" : "false"}
+                        className="data-checked:bg-[var(--accent)] data-unchecked:bg-[var(--surface-border)]"
+                      />
+                    </div>
+
+                    {fieldState.error ? (
+                      <p role="alert" className="text-xs text-[var(--status-danger)]">
+                        {fieldState.error.message}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              />
+            </div>
 
             <div className={DIVIDER_CLASS_NAME} />
 

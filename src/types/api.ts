@@ -173,10 +173,10 @@ export interface FarmaciaCreate {
   nome: string;
   latitude: number;
   longitude: number;
-  endereco?: string;
-  cidade?: string;
-  uf?: string;
-  deposito?: boolean;
+  endereco: string;
+  cidade: string;
+  uf: string;
+  deposito: boolean;
 }
 
 export interface FarmaciaUpdate {

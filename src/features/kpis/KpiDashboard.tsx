@@ -39,6 +39,7 @@ import type {
 
 const QUERY_STALE_TIME = 15_000;
 const SUPPORT_QUERY_STALE_TIME = 60_000;
+const KPI_REFETCH_INTERVAL_MS = 15_000;
 const HISTORICO_LIMITE = 100;
 const PERCENT_MAX = 100;
 const CHART_HEIGHT = 180;
@@ -353,16 +354,25 @@ export function KpiDashboard(): ReactElement {
     queryKey: ["historico", "kpis"],
     queryFn: getKpisGerais,
     staleTime: QUERY_STALE_TIME,
+    refetchInterval: KPI_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const kpisTempoRealQuery = useQuery({
     queryKey: ["historico", "kpis", "tempo-real"],
     queryFn: getKpisTempoReal,
     staleTime: QUERY_STALE_TIME,
+    refetchInterval: KPI_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const kpisFarmaciasQuery = useQuery({
     queryKey: ["historico", "kpis", "farmacias"],
     queryFn: getKpisFarmacias,
     staleTime: QUERY_STALE_TIME,
+    refetchInterval: KPI_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const historicoQuery = useQuery({
     queryKey: ["historico", selectedDroneId, selectedFarmaciaId],
@@ -373,6 +383,9 @@ export function KpiDashboard(): ReactElement {
         limite: HISTORICO_LIMITE,
       }),
     staleTime: QUERY_STALE_TIME,
+    refetchInterval: KPI_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
   const dronesQuery = useQuery({
     queryKey: ["drones"],
@@ -384,6 +397,34 @@ export function KpiDashboard(): ReactElement {
     queryFn: listFarmacias,
     staleTime: SUPPORT_QUERY_STALE_TIME,
   });
+  const farmacias = useMemo(
+    () => farmaciasQuery.data?.farmacias ?? [],
+    [farmaciasQuery.data],
+  );
+  const drones = useMemo(() => dronesQuery.data?.drones ?? [], [dronesQuery.data]);
+  const kpisFarmacias = useMemo(
+    () => kpisFarmaciasQuery.data?.farmacias ?? [],
+    [kpisFarmaciasQuery.data],
+  );
+  const historico = useMemo(
+    () => historicoQuery.data?.historico ?? [],
+    [historicoQuery.data],
+  );
+  const farmaciasAtivas = useMemo(
+    () => farmacias.filter((farmacia) => farmacia.ativa),
+    [farmacias],
+  );
+  const kpisFarmaciasAtivas = useMemo(
+    () =>
+      kpisFarmacias.filter((kpi) =>
+        farmaciasAtivas.some((farmacia) => farmacia.id === kpi.farmacia_id),
+      ),
+    [farmaciasAtivas, kpisFarmacias],
+  );
+  const farmaciasMap = useMemo(
+    () => new Map(farmaciasAtivas.map((farmacia) => [farmacia.id, farmacia])),
+    [farmaciasAtivas],
+  );
 
   const isLoading =
     kpisGeraisQuery.isLoading ||
@@ -395,12 +436,6 @@ export function KpiDashboard(): ReactElement {
     kpisTempoRealQuery.error ??
     kpisFarmaciasQuery.error ??
     historicoQuery.error;
-  const farmacias = farmaciasQuery.data?.farmacias ?? [];
-  const drones = dronesQuery.data?.drones ?? [];
-  const farmaciasMap = useMemo(
-    () => new Map(farmacias.map((farmacia) => [farmacia.id, farmacia])),
-    [farmacias],
-  );
 
   function handleDroneChange(event: ChangeEvent<HTMLSelectElement>): void {
     setDroneFilter(event.target.value);
@@ -434,8 +469,6 @@ export function KpiDashboard(): ReactElement {
 
   const kpisGerais = kpisGeraisQuery.data;
   const kpisTempoReal = kpisTempoRealQuery.data;
-  const kpisFarmacias = kpisFarmaciasQuery.data?.farmacias ?? [];
-  const historico = historicoQuery.data?.historico ?? [];
 
   return (
     <section className={PAGE_CLASS_NAME}>
@@ -530,7 +563,7 @@ export function KpiDashboard(): ReactElement {
           />
         </div>
 
-        <FarmaciaCharts kpis={kpisFarmacias} />
+        <FarmaciaCharts kpis={kpisFarmaciasAtivas} />
 
         <section className={cn(CARD_CLASS_NAME, "flex flex-col gap-5")}>
           <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -567,7 +600,7 @@ export function KpiDashboard(): ReactElement {
                   className={FILTER_SELECT_CLASS_NAME}
                 >
                   <option value="todas">Todas as farmacias</option>
-                  {farmacias.map((farmacia) => (
+                  {farmaciasAtivas.map((farmacia) => (
                     <option key={farmacia.id} value={String(farmacia.id)}>
                       {farmacia.nome}
                     </option>
