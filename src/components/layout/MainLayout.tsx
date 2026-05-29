@@ -2,13 +2,15 @@ import type { ReactElement } from "react";
 
 import { NavLink, Outlet } from "react-router-dom";
 
-const LAYOUT_CLASS_NAME = "flex min-h-dvh flex-col bg-background text-foreground";
+const LAYOUT_CLASS_NAME =
+  "flex min-h-dvh flex-col bg-[var(--surface-base)] text-[var(--text-primary)]";
 const HEADER_CLASS_NAME =
-  "flex h-14 items-center justify-between border-b border-border bg-card px-6";
-const BRAND_CLASS_NAME = "text-sm font-semibold tracking-[0.08em] text-foreground";
+  "flex h-14 items-center justify-between border-b border-[var(--surface-border)] bg-[var(--surface-panel)] px-6";
+const BRAND_CLASS_NAME =
+  "text-sm font-semibold tracking-[0.08em] text-[var(--text-primary)]";
 const NAV_CLASS_NAME = "flex items-center gap-2 overflow-x-auto";
 const LINK_BASE_CLASS_NAME =
-  "rounded-md px-3 py-2 text-sm font-medium transition-colors duration-150";
+  "rounded-[var(--radius-sm)] px-3 py-2 text-sm font-medium transition-colors duration-150";
 const LINK_IDLE_CLASS_NAME =
   "text-[var(--text-secondary)] hover:bg-[var(--surface-overlay)] hover:text-[var(--text-primary)]";
 const LINK_ACTIVE_CLASS_NAME =

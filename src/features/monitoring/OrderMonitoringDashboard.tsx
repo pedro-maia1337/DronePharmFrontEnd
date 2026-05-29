@@ -44,8 +44,9 @@ import { useTelemetryStore } from "./store/useTelemetryStore";
 const QUERY_STALE_TIME = 10_000;
 const ACTIVE_MONITORING_REFETCH_MS = 5_000;
 const ACTIVE_MONITORING_REFETCH_WHILE_STREAMING_MS = 15_000;
-const DASHBOARD_CLASS_NAME = "flex h-[calc(100dvh-56px)] overflow-hidden";
-const MAP_PANEL_CLASS_NAME = "w-[70%] shrink-0 p-5";
+const DASHBOARD_CLASS_NAME =
+  "flex h-[calc(100dvh-56px)] overflow-hidden bg-[var(--surface-base)]";
+const MAP_PANEL_CLASS_NAME = "w-[70%] shrink-0";
 const SIDEBAR_CLASS_NAME =
   "flex w-[30%] min-w-[320px] max-w-[420px] shrink-0 flex-col overflow-y-auto border-l border-[var(--surface-border)] bg-[var(--surface-panel)]";
 const SECTION_CLASS_NAME =

@@ -71,12 +71,12 @@ function MonitoringRoute(): ReactElement {
 
 function NotFoundRoute(): ReactElement {
   return (
-    <div className="flex min-h-[calc(100dvh-56px)] items-center justify-center p-6">
-      <div className="flex max-w-md flex-col gap-4 rounded-xl border border-border bg-card p-6 text-center">
-        <h2 className="text-lg font-semibold text-foreground">
+    <div className="flex min-h-[calc(100dvh-56px)] items-center justify-center bg-[var(--surface-base)] p-6">
+      <div className="flex max-w-md flex-col gap-4 rounded-[var(--radius-lg)] border border-[var(--surface-border)] bg-[var(--surface-card)] p-6 text-center shadow-[var(--shadow-card)]">
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">
           Rota nao encontrada
         </h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-[var(--text-secondary)]">
           A URL informada nao corresponde a nenhuma tela do DronePharm.
         </p>
         <Button asChild>
@@ -89,7 +89,7 @@ function NotFoundRoute(): ReactElement {
 
 export default function App(): ReactElement {
   return (
-    <div className="dark min-h-dvh bg-background text-foreground">
+    <div className="dark min-h-dvh bg-[var(--surface-base)] text-[var(--text-primary)]">
       <BrowserRouter>
         <Routes>
           <Route element={<MainLayout />}>

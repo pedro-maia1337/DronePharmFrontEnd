@@ -252,7 +252,10 @@ export function TelemetryGrid({
   );
 
   return (
-    <section aria-label="Telemetria" className="flex flex-col gap-[10px]">
+    <section
+      aria-label="Telemetria"
+      className="flex flex-col gap-[10px] border-b border-[var(--surface-border)] px-5 py-[14px]"
+    >
       <div className="text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]">
         Telemetria
       </div>

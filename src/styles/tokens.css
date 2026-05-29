@@ -1,4 +1,5 @@
-.root {
+:root,
+.dark {
     /* Superficies */
     --surface-base:     #0a0e14;   /* fundo da aplicação inteira */
     --surface-panel:    #0f1520;   /* painel lateral, sidebar */
@@ -17,6 +18,17 @@
     --accent:           #00ff9c;   /* rota no mapa, ícone do drone, foco ativo */
     --accent-dim:       #00cc7a;   /* hover do acento */
     --accent-ghost:     rgba(0,255,156,0.08);
+
+    /* Mapa */
+    --map-base:         #080c11;
+    --map-grid:         rgba(30,45,69,0.30);
+    --map-route:        #00ff9c;
+    --map-route-outline:rgba(0,0,0,0.72);
+    --map-destination:  #f59e0b;
+    --map-origin:       #3b82f6;
+    --map-waypoint:     #f8fafc;
+    --map-marker-halo:  rgba(10,14,20,0.92);
+    --map-marker-shadow:rgba(0,0,0,0.55);
 
     /* Estados semanticos */
     --status-ok:        #22c55e;

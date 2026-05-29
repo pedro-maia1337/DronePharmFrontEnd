@@ -31,10 +31,11 @@ const MAP_TILE_URL =
   "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 const MAP_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
-const ROUTE_COLOR = "#00ff9c";
-const DESTINATION_COLOR = "#f59e0b";
-const ORIGIN_COLOR = "#3b82f6";
-const WAYPOINT_COLOR = "#f8fafc";
+const ROUTE_COLOR = "var(--map-route)";
+const ROUTE_OUTLINE_COLOR = "var(--map-route-outline)";
+const DESTINATION_COLOR = "var(--map-destination)";
+const ORIGIN_COLOR = "var(--map-origin)";
+const WAYPOINT_COLOR = "var(--map-waypoint)";
 const DEFAULT_CENTER: [number, number] = [-19.932, -43.9408];
 const DEFAULT_ZOOM = 15;
 const DESTINATION_RADIUS_METERS = 18;
@@ -43,10 +44,10 @@ const DRONE_OPACITY_LOST = 0.5;
 const DRONE_OPACITY_DEFAULT = 1;
 const DRONE_ANIMATION_DURATION_MS = 220;
 const MAP_WRAPPER_CLASS_NAME =
-  "relative h-full min-h-[420px] w-full overflow-hidden rounded-[var(--radius-lg)] border border-[var(--surface-border)] bg-[#080c11]";
+  "relative h-full min-h-[420px] w-full overflow-hidden bg-[var(--map-base)]";
 const MAP_CLASS_NAME = "h-full w-full";
 const MAP_LABEL_CLASS_NAME =
-  "pointer-events-none absolute bottom-5 left-5 z-[500] rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-[var(--surface-card)] px-3 py-1 font-mono text-[11px] text-[var(--text-muted)]";
+  "pointer-events-none absolute bottom-5 left-5 z-[500] rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-[var(--surface-card)] px-3 py-1 font-[var(--font-data)] text-[11px] text-[var(--text-muted)]";
 
 interface MapCanvasProps {
   routePoints: [number, number][];
@@ -85,9 +86,9 @@ function createDroneIconHtml(direction: number, signalLost: boolean): string {
   const filter = signalLost ? "grayscale(1)" : "none";
 
   return `
-    <div style="width:24px;height:24px;transform:rotate(${direction}deg);transform-origin:center center;display:flex;align-items:center;justify-content:center;opacity:${opacity};filter:${filter};">
+    <div style="width:28px;height:28px;transform:rotate(${direction}deg);transform-origin:center center;display:flex;align-items:center;justify-content:center;opacity:${opacity};filter:${filter} drop-shadow(0 2px 4px var(--map-marker-shadow));">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <path d="M12 2L21 22L12 17L3 22L12 2Z" fill="${fillColor}" />
+        <path d="M12 2L21 22L12 17L3 22L12 2Z" fill="${fillColor}" stroke="var(--map-marker-halo)" stroke-width="2.5" stroke-linejoin="round" paint-order="stroke fill" />
       </svg>
     </div>
   `;
@@ -96,7 +97,7 @@ function createDroneIconHtml(direction: number, signalLost: boolean): string {
 function createStaticIcon(color: string, size: number): DivIcon {
   return L.divIcon({
     className: "",
-    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${color};box-shadow:0 0 0 2px color-mix(in srgb, ${color} 30%, transparent);"></div>`,
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${color};border:2px solid var(--map-marker-halo);box-shadow:0 2px 8px var(--map-marker-shadow),0 0 0 1px var(--surface-border);"></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -105,15 +106,15 @@ function createStaticIcon(color: string, size: number): DivIcon {
 function getWaypointBorderColor(status: PedidoStatus | null): string {
   switch (status) {
     case "entregue":
-      return "#10b981";
+      return "var(--status-ok)";
     case "em_voo":
-      return "#38bdf8";
+      return "var(--accent)";
     case "despachado":
     case "calculado":
-      return "#f59e0b";
+      return "var(--status-warn)";
     case "cancelado":
     case "falha":
-      return "#ef4444";
+      return "var(--status-danger)";
     case "pendente":
     default:
       return ROUTE_COLOR;
@@ -123,7 +124,7 @@ function getWaypointBorderColor(status: PedidoStatus | null): string {
 function getWaypointFillColor(status: PedidoStatus | null): string {
   switch (status) {
     case "entregue":
-      return "#10b981";
+      return "var(--status-ok)";
     default:
       return WAYPOINT_COLOR;
   }
@@ -137,7 +138,7 @@ function createWaypointIcon(seq: number, status: PedidoStatus | null): DivIcon {
   return L.divIcon({
     className: "",
     html: `
-      <div style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:9999px;background:${fillColor};color:${textColor};border:2px solid ${borderColor};font-size:11px;font-weight:700;box-shadow:0 8px 20px rgba(2,6,23,0.35);">
+      <div style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:9999px;background:${fillColor};color:${textColor};border:2px solid ${borderColor};font-family:var(--font-data);font-size:11px;font-weight:700;box-shadow:0 8px 20px var(--map-marker-shadow),0 0 0 2px var(--map-marker-halo);">
         ${seq}
       </div>
     `,
@@ -150,8 +151,8 @@ function createDroneIcon(direction: number, signalLost: boolean): DivIcon {
   return L.divIcon({
     className: "",
     html: createDroneIconHtml(direction, signalLost),
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
   });
 }
 
@@ -276,10 +277,20 @@ const StaticRouteLayer = memo(function StaticRouteLayer({
   return (
     <>
       {routePoints.length > 1 ? (
-        <Polyline
-          positions={routePoints}
-          pathOptions={{ color: ROUTE_COLOR, weight: 3, opacity: 0.9 }}
-        />
+        <>
+          <Polyline
+            positions={routePoints}
+            pathOptions={{
+              color: ROUTE_OUTLINE_COLOR,
+              weight: 7,
+              opacity: 0.95,
+            }}
+          />
+          <Polyline
+            positions={routePoints}
+            pathOptions={{ color: ROUTE_COLOR, weight: 3, opacity: 0.9 }}
+          />
+        </>
       ) : null}
       {depot !== null ? (
         <Marker position={depot} icon={ORIGIN_ICON}>
@@ -323,7 +334,13 @@ const StaticRouteLayer = memo(function StaticRouteLayer({
         <Circle
           center={destination}
           radius={DESTINATION_RADIUS_METERS}
-          pathOptions={{ color: DESTINATION_COLOR, opacity: 0.7 }}
+          pathOptions={{
+            color: DESTINATION_COLOR,
+            fillColor: DESTINATION_COLOR,
+            fillOpacity: 0.12,
+            opacity: 0.78,
+            weight: 2,
+          }}
         />
       ) : null}
     </>
