@@ -103,6 +103,7 @@ export default function App(): ReactElement {
               <Route path="farmacias/nova" element={<FormFarmacia />} />
               <Route path="farmacias/:id/editar" element={<FormFarmacia />} />
               <Route path="drones" element={<ListaDrones />} />
+              <Route path="drones/:droneId/editar" element={<ListaDrones />} />
               <Route path="drones/novo" element={<FormDrone />} />
               <Route path="kpis" element={<KpiDashboard />} />
             </Route>

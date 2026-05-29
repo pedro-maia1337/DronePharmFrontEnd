@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { listDrones } from "@/api/drones";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,9 @@ import { FormSkeleton } from "@/components/ui/FormSkeleton";
 import { cn } from "@/lib/utils";
 import type { DroneResponse, StatusDroneEnum } from "@/types/api";
 
+import { BateriaIndicador } from "./BateriaIndicador";
+import { getStatusBadgeConfig } from "./droneUi";
+import DroneEditorDrawer from "./DroneEditorDrawer";
 import { useDronesStore } from "./store/useDronesStore";
 
 const PAGE_SIZE = 10;
@@ -57,15 +60,6 @@ interface DroneRowProps {
   drone: DroneResponse;
 }
 
-interface StatusBadgeConfig {
-  label: string;
-  className: string;
-}
-
-interface BateriaIndicadorProps {
-  bateriaPct: number | null;
-}
-
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -76,102 +70,6 @@ function getErrorMessage(error: unknown): string {
 
 function formatNumber(value: number, suffix: string): string {
   return `${value.toFixed(1)} ${suffix}`;
-}
-
-function getBatteryColorClass(percentage: number): string {
-  if (percentage < 20) {
-    return "bg-[var(--status-danger)]";
-  }
-
-  if (percentage < 50) {
-    return "bg-[var(--status-warn)]";
-  }
-
-  return "bg-[var(--status-ok)]";
-}
-
-function getBatteryTextClass(percentage: number): string {
-  if (percentage < 20) {
-    return "text-[var(--status-danger)]";
-  }
-
-  if (percentage < 50) {
-    return "text-[var(--status-warn)]";
-  }
-
-  return "text-[var(--status-ok)]";
-}
-
-function BateriaIndicador({ bateriaPct }: BateriaIndicadorProps): ReactElement {
-  if (bateriaPct === null) {
-    return <span className="text-[var(--text-muted)]">-</span>;
-  }
-
-  const percentage = Math.round(bateriaPct * 100);
-  const batteryColorClass = getBatteryColorClass(percentage);
-  const batteryTextClass = getBatteryTextClass(percentage);
-
-  return (
-    <div
-      role="meter"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={percentage}
-      className="flex min-w-[120px] items-center gap-3"
-    >
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--surface-border)]">
-        <div
-          className={cn("h-full rounded-full transition-[width] duration-150", batteryColorClass)}
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-      <span className={cn("min-w-10 text-right text-sm font-medium", batteryTextClass, DATA_FONT_CLASS_NAME)}>
-        {percentage}%
-      </span>
-    </div>
-  );
-}
-
-function getStatusBadgeConfig(status: StatusDroneEnum): StatusBadgeConfig {
-  switch (status) {
-    case "aguardando":
-      return {
-        label: "Aguardando",
-        className:
-          "border-transparent bg-[var(--status-ok-bg)] text-[var(--status-ok)]",
-      };
-    case "em_voo":
-      return {
-        label: "Em voo",
-        className:
-          "border-transparent bg-[var(--status-lock-bg)] text-[var(--status-lock)]",
-      };
-    case "retornando":
-      return {
-        label: "Retornando",
-        className:
-          "border-transparent bg-[var(--status-info-bg)] text-[var(--status-info)]",
-      };
-    case "carregando":
-      return {
-        label: "Carregando",
-        className:
-          "border-transparent bg-[var(--status-warn-bg)] text-[var(--status-warn)]",
-      };
-    case "manutencao":
-      return {
-        label: "Manutencao",
-        className:
-          "border-transparent bg-[var(--status-danger-bg)] text-[var(--status-danger)]",
-      };
-    case "emergencia":
-    default:
-      return {
-        label: "Emergencia",
-        className:
-          "border-transparent bg-[var(--status-danger-bg)] text-[var(--status-danger)]",
-      };
-  }
 }
 
 function renderSelectChevron(): ReactElement {
@@ -238,6 +136,8 @@ const DroneRow = memo(
 );
 
 export function ListaDrones(): ReactElement {
+  const navigate = useNavigate();
+  const { droneId } = useParams<{ droneId?: string }>();
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>("todos");
   const [currentPage, setCurrentPage] = useState(1);
   const drones = useDronesStore((state) => state.drones);
@@ -256,10 +156,6 @@ export function ListaDrones(): ReactElement {
     setDrones(dronesQuery.data.drones);
   }, [dronesQuery.data, setDrones]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [statusFilter]);
-
   const filteredDrones = useMemo(() => {
     if (statusFilter === "todos") {
       return drones;
@@ -275,7 +171,12 @@ export function ListaDrones(): ReactElement {
   }, [currentPage, filteredDrones]);
 
   function handleStatusChange(event: ChangeEvent<HTMLSelectElement>): void {
+    setCurrentPage(1);
     setStatusFilter(event.target.value as StatusFilterValue);
+  }
+
+  function handleCloseDrawer(): void {
+    navigate("/drones", { replace: true });
   }
 
   if (dronesQuery.isLoading) {
@@ -405,6 +306,10 @@ export function ListaDrones(): ReactElement {
           )}
         </section>
       </div>
+
+      {droneId !== undefined ? (
+        <DroneEditorDrawer droneId={droneId} onClose={handleCloseDrawer} />
+      ) : null}
     </section>
   );
 }

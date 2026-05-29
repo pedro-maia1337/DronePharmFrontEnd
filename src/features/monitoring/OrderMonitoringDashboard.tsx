@@ -1,15 +1,19 @@
 import {
+  useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
+  useReducer,
   useState,
   type ReactElement,
 } from "react";
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 
 import { ApiError } from "@/api/client";
+import { getDepositoFarmacia } from "@/api/farmacias";
 import { listDrones } from "@/api/drones";
 import { getMapaSnapshot } from "@/api/mapa";
 import { cancelarPedido, entregarPedido, getPedido, getPedidoAtivo } from "@/api/pedidos";
@@ -54,6 +58,8 @@ const ERROR_STATE_CARD_CLASS_NAME =
   "flex max-w-md flex-col gap-4 rounded-[var(--radius-lg)] border border-[var(--surface-border)] bg-[var(--surface-panel)] p-6 text-center";
 const COMPLETION_BANNER_CLASS_NAME =
   "mb-3 animate-pulse rounded-[var(--radius-md)] border border-[rgba(16,185,129,0.35)] bg-[rgba(16,185,129,0.12)] px-4 py-3 text-sm font-medium text-[var(--status-success,#10b981)]";
+const DEPOT_WARNING_CLASS_NAME =
+  "mb-3 flex items-start gap-2 rounded-[var(--radius-md)] border border-[rgba(245,158,11,0.3)] bg-[rgba(245,158,11,0.12)] px-4 py-3 text-sm text-[var(--text-secondary)]";
 const COMPLETION_BANNER_DURATION_MS = 4_000;
 const ROUTE_PEDIDO_ITEM_CLASS_NAME =
   "flex items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-[var(--surface-card)] px-3 py-2";
@@ -66,6 +72,18 @@ interface RoutePedidoStatusItem {
 interface RefreshQueriesOptions {
   includePedidoAtivo?: boolean;
 }
+
+interface MonitoringUiState {
+  statusOverride: PedidoStatus | null;
+  completionBannerVisible: boolean;
+}
+
+type MonitoringUiAction =
+  | { type: "reset" }
+  | { type: "mark_em_voo" }
+  | { type: "set_status_override"; status: PedidoStatus | null }
+  | { type: "show_completion_banner" }
+  | { type: "hide_completion_banner" };
 
 function isPedidoStatus(value: string | null | undefined): value is PedidoStatus {
   return (
@@ -82,6 +100,9 @@ function isPedidoStatus(value: string | null | undefined): value is PedidoStatus
 interface OrderMonitoringDashboardProps {
   pedidoId: number;
 }
+
+type PedidoQueryData = Awaited<ReturnType<typeof getPedido>>;
+type PedidoAtivoQueryData = Awaited<ReturnType<typeof getPedidoAtivo>>;
 
 function isValidationError(error: unknown): error is HTTPValidationError {
   return typeof error === "object" && error !== null && "detail" in error;
@@ -111,6 +132,45 @@ function getErrorMessage(error: unknown): string {
 
 function isNotFoundError(error: unknown): boolean {
   return error instanceof ApiError && error.status === 404;
+}
+
+function monitoringUiReducer(
+  state: MonitoringUiState,
+  action: MonitoringUiAction,
+): MonitoringUiState {
+  switch (action.type) {
+    case "reset":
+      return {
+        statusOverride: null,
+        completionBannerVisible: false,
+      };
+    case "mark_em_voo":
+      return {
+        ...state,
+        statusOverride:
+          state.statusOverride === "entregue" ||
+          state.statusOverride === "cancelado"
+            ? state.statusOverride
+            : "em_voo",
+      };
+    case "set_status_override":
+      return {
+        ...state,
+        statusOverride: action.status,
+      };
+    case "show_completion_banner":
+      return {
+        ...state,
+        completionBannerVisible: true,
+      };
+    case "hide_completion_banner":
+      return {
+        ...state,
+        completionBannerVisible: false,
+      };
+    default:
+      return state;
+  }
 }
 
 function renderLoadingState(): ReactElement {
@@ -262,8 +322,13 @@ export function OrderMonitoringDashboard({
   const [isSimulatingNow, setIsSimulatingNow] = useState(false);
   const [isAbortingFlight, setIsAbortingFlight] = useState(false);
   const [heartbeatNow, setHeartbeatNow] = useState(() => Date.now());
-  const [statusOverride, setStatusOverride] = useState<PedidoStatus | null>(null);
-  const [completionBannerVisible, setCompletionBannerVisible] = useState(false);
+  const [monitoringUiState, dispatchMonitoringUi] = useReducer(
+    monitoringUiReducer,
+    {
+      statusOverride: null,
+      completionBannerVisible: false,
+    },
+  );
   const routePreview = useTelemetryStore((state) => state.routePreview);
   const selectedDroneId = useTelemetryStore((state) => state.selectedDroneId);
   const selectedDroneStream = useTelemetryStore((state) =>
@@ -308,6 +373,12 @@ export function OrderMonitoringDashboard({
     queryFn: getMapaSnapshot,
     staleTime: QUERY_STALE_TIME,
   });
+  const depositoQuery = useQuery({
+    queryKey: ["farmacias", "deposito"],
+    queryFn: getDepositoFarmacia,
+    staleTime: QUERY_STALE_TIME,
+    retry: false,
+  });
   const rotaQuery = useQuery({
     queryKey: ["rota", pedidoQuery.data?.rota_id],
     queryFn: () => getRota(pedidoQuery.data?.rota_id ?? 0),
@@ -351,15 +422,15 @@ export function OrderMonitoringDashboard({
       return null;
     }
 
-    if (statusOverride === null) {
+    if (monitoringUiState.statusOverride === null) {
       return snapshot;
     }
 
     return {
       ...snapshot,
-      status: statusOverride,
+      status: monitoringUiState.statusOverride,
     };
-  }, [snapshot, statusOverride]);
+  }, [monitoringUiState.statusOverride, snapshot]);
   const geoJsonSnapshot = useMemo(() => {
     return buildMonitoringGeoJsonSnapshot(
       mapaSnapshotQuery.data ?? null,
@@ -401,28 +472,12 @@ export function OrderMonitoringDashboard({
 
     return [];
   }, [effectiveSnapshot, geoJsonSnapshot.routePoints, routeWaypoints]);
-  const activeDroneId = useMemo(() => {
-    if (effectiveSnapshot?.droneId) {
-      return effectiveSnapshot.droneId;
-    }
-
-    if (
-      (pedidoQuery.data?.status === "despachado" ||
-        pedidoQuery.data?.status === "em_voo") &&
-      rotaQuery.data?.drone_id
-    ) {
-      return rotaQuery.data.drone_id;
-    }
-
-    if (
-      pedidoQuery.data?.status === "despachado" ||
-      pedidoQuery.data?.status === "em_voo"
-    ) {
-      return selectedDroneId;
-    }
-
-    return "";
-  }, [effectiveSnapshot, pedidoQuery.data?.status, rotaQuery.data?.drone_id, selectedDroneId]);
+  const activeDroneId = effectiveSnapshot?.droneId
+    ? effectiveSnapshot.droneId
+    : pedidoQuery.data?.status === "despachado" ||
+        pedidoQuery.data?.status === "em_voo"
+      ? rotaQuery.data?.drone_id ?? selectedDroneId
+      : "";
   const currentFrame = useTelemetryStore((state) => state.getFrame(activeDroneId));
   const deferredFrame = useDeferredValue(currentFrame);
   const historyLength = useTelemetryStore(
@@ -544,12 +599,46 @@ export function OrderMonitoringDashboard({
     effectiveSnapshot?.status === "calculado" &&
     pedidoQuery.data?.rota_id !== null &&
     pedidoQuery.data?.rota_id !== undefined;
+  const depositoDisponivel = depositoQuery.data !== undefined;
+  const depositoBloqueado = depositoQuery.isError && isNotFoundError(depositoQuery.error);
+  const routeCalculationBlockedReason = depositoBloqueado
+    ? "Nenhum deposito ativo cadastrado. Reative ou crie a farmacia-polo antes de calcular rotas."
+    : depositoQuery.isLoading
+      ? "Verificando o deposito principal..."
+      : depositoQuery.isError
+        ? "Nao foi possivel validar o deposito principal."
+        : null;
+  const routeCalculationAvailable =
+    depositoDisponivel &&
+    !depositoBloqueado &&
+    !depositoQuery.isLoading;
   const activeRotaId = pedidoAtivoQuery.data?.rota_id ?? pedidoQuery.data?.rota_id ?? null;
+  const refreshQueries = useCallback(
+    async (options: RefreshQueriesOptions = {}): Promise<void> => {
+      const { includePedidoAtivo = true } = options;
+      const invalidations: Promise<unknown>[] = [
+        queryClient.invalidateQueries({ queryKey: ["pedido", pedidoId] }),
+        queryClient.invalidateQueries({ queryKey: ["rota"] }),
+        queryClient.invalidateQueries({ queryKey: ["drones"] }),
+        queryClient.invalidateQueries({ queryKey: ["monitoring-pedidos"] }),
+      ];
+
+      if (includePedidoAtivo) {
+        invalidations.push(
+          queryClient.invalidateQueries({ queryKey: ["pedido-ativo", pedidoId] }),
+        );
+      }
+
+      await Promise.all(invalidations);
+    },
+    [pedidoId, queryClient],
+  );
+  const pedidoStatus = pedidoQuery.data?.status;
+  const pedidoAtivoStatus = pedidoAtivoQuery.data?.status;
 
   useEffect(() => {
     resetTelemetry();
-    setStatusOverride(null);
-    setCompletionBannerVisible(false);
+    dispatchMonitoringUi({ type: "reset" });
   }, [pedidoId, resetTelemetry]);
 
   useEffect(() => {
@@ -591,13 +680,7 @@ export function OrderMonitoringDashboard({
       return;
     }
 
-    setStatusOverride((currentStatus) => {
-      if (currentStatus === "entregue" || currentStatus === "cancelado") {
-        return currentStatus;
-      }
-
-      return "em_voo";
-    });
+    dispatchMonitoringUi({ type: "mark_em_voo" });
   }, [currentFrame?.status_missao]);
 
   useEffect(() => {
@@ -613,15 +696,15 @@ export function OrderMonitoringDashboard({
     if (nextStatus !== null) {
       queryClient.setQueryData(
         ["pedido", lastEvent.pedido_id],
-        (currentData: typeof pedidoQuery.data) =>
-        currentData ? { ...currentData, status: nextStatus } : currentData,
+        (currentData: PedidoQueryData | undefined) =>
+          currentData ? { ...currentData, status: nextStatus } : currentData,
       );
 
       if (lastEvent.pedido_id === pedidoId) {
-        setStatusOverride(nextStatus);
+        dispatchMonitoringUi({ type: "set_status_override", status: nextStatus });
         queryClient.setQueryData(
           ["pedido-ativo", pedidoId],
-          (currentData: typeof pedidoAtivoQuery.data) =>
+          (currentData: PedidoAtivoQueryData | undefined) =>
             currentData ? { ...currentData, status: nextStatus } : currentData,
         );
       }
@@ -632,10 +715,10 @@ export function OrderMonitoringDashboard({
     }
 
     if (lastEvent.evento === "pedido_entregue" || nextStatus === "entregue") {
-      setCompletionBannerVisible(true);
+      dispatchMonitoringUi({ type: "show_completion_banner" });
       toast.success("Missao concluida com sucesso.");
       window.setTimeout(() => {
-        setCompletionBannerVisible(false);
+        dispatchMonitoringUi({ type: "hide_completion_banner" });
       }, COMPLETION_BANNER_DURATION_MS);
       void refreshQueries({ includePedidoAtivo: false });
     }
@@ -646,7 +729,10 @@ export function OrderMonitoringDashboard({
   }, [
     pedidoId,
     pedidoStream.lastEvent,
+    pedidoAtivoStatus,
+    pedidoStatus,
     queryClient,
+    refreshQueries,
   ]);
 
   useEffect(() => {
@@ -684,29 +770,25 @@ export function OrderMonitoringDashboard({
     toast.error(pedidoStream.error);
   }, [pedidoStream.error]);
 
-  async function refreshQueries(
-    options: RefreshQueriesOptions = {},
-  ): Promise<void> {
-    const { includePedidoAtivo = true } = options;
-    const invalidations: Promise<unknown>[] = [
-      queryClient.invalidateQueries({ queryKey: ["pedido", pedidoId] }),
-      queryClient.invalidateQueries({ queryKey: ["rota"] }),
-      queryClient.invalidateQueries({ queryKey: ["drones"] }),
-      queryClient.invalidateQueries({ queryKey: ["monitoring-pedidos"] }),
-    ];
-
-    if (includePedidoAtivo) {
-      invalidations.push(
-        queryClient.invalidateQueries({ queryKey: ["pedido-ativo", pedidoId] }),
-      );
+  useEffect(() => {
+    if (!depositoQuery.isError || depositoBloqueado) {
+      return;
     }
 
-    await Promise.all(invalidations);
-  }
+    toast.error(getErrorMessage(depositoQuery.error));
+  }, [depositoBloqueado, depositoQuery.error, depositoQuery.isError]);
 
   async function handleCalcularRota(): Promise<void> {
     if (selectedDroneId.trim().length === 0) {
       toast.error("Selecione um drone disponivel para calcular a rota.");
+      return;
+    }
+
+    if (!routeCalculationAvailable) {
+      toast.error(
+        routeCalculationBlockedReason ??
+          "Nao foi possivel validar o deposito principal para calcular a rota.",
+      );
       return;
     }
 
@@ -783,7 +865,7 @@ export function OrderMonitoringDashboard({
     try {
       setIsSimulatingNow(true);
       await simularRotaAgora(rotaId);
-      setStatusOverride("em_voo");
+      dispatchMonitoringUi({ type: "set_status_override", status: "em_voo" });
       await refreshQueries();
       toast.success("Simulacao iniciada imediatamente.");
     } catch (error) {
@@ -802,7 +884,7 @@ export function OrderMonitoringDashboard({
     try {
       setIsAbortingFlight(true);
       await abortarRota(activeRotaId);
-      setStatusOverride("pendente");
+      dispatchMonitoringUi({ type: "set_status_override", status: "pendente" });
       await refreshQueries();
       toast.success("Simulacao abortada e drone liberado.");
     } catch (error) {
@@ -845,9 +927,28 @@ export function OrderMonitoringDashboard({
       </div>
 
       <aside className={SIDEBAR_CLASS_NAME}>
-        {completionBannerVisible ? (
+        {monitoringUiState.completionBannerVisible ? (
           <div className={COMPLETION_BANNER_CLASS_NAME}>
             Missao encerrada. Drone liberado e pedido concluido.
+          </div>
+        ) : null}
+        {depositoBloqueado ? (
+          <div className={DEPOT_WARNING_CLASS_NAME}>
+            <span className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-[rgba(245,158,11,0.2)] text-[rgba(245,158,11,0.95)]">
+              !
+            </span>
+            <div className="flex flex-1 flex-col gap-1">
+              <strong className="text-[var(--text-primary)]">
+                Deposito principal ausente
+              </strong>
+              <span>
+                Sem uma farmacia-polo ativa, o backend retorna 404 ao calcular
+                rotas. Reative ou recrie o deposito para liberar a operacao.
+              </span>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/farmacias">Abrir farmacias</Link>
+            </Button>
           </div>
         ) : null}
         {renderHeader(effectiveSnapshot.pedidoId, effectiveSnapshot.status)}
@@ -880,6 +981,8 @@ export function OrderMonitoringDashboard({
           isSimulatingNow={isSimulatingNow}
           isAbortingFlight={isAbortingFlight}
           canStartFlight={canStartFlight}
+          canCalculateRoute={routeCalculationAvailable}
+          routeCalculationBlockedReason={routeCalculationBlockedReason}
           onCancelar={handleCancelar}
           onEntregar={handleEntregar}
           onAbortarSimulacao={handleAbortarSimulacao}

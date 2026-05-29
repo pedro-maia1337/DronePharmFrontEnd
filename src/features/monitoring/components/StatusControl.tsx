@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent, type ReactElement } from "react";
 
-import { Lock } from "lucide-react";
+import { AlertTriangle, Lock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -57,6 +57,8 @@ interface StatusControlProps {
   isSimulatingNow?: boolean;
   isAbortingFlight?: boolean;
   canStartFlight?: boolean;
+  canCalculateRoute?: boolean;
+  routeCalculationBlockedReason?: string | null;
   onCancelar: () => void;
   onEntregar: () => void;
   onAbortarSimulacao?: () => void;
@@ -94,6 +96,8 @@ export function StatusControl({
   isSimulatingNow = false,
   isAbortingFlight = false,
   canStartFlight = false,
+  canCalculateRoute = true,
+  routeCalculationBlockedReason = null,
   onCancelar,
   onEntregar,
   onAbortarSimulacao = () => {},
@@ -106,8 +110,8 @@ export function StatusControl({
   const [dialogOpen, setDialogOpen] = useState(false);
   const flightLocked = hasFlightLock(status);
   const canCancel = canCancelPedido(status);
-  const canCalculateRoute = isPedidoSelectable(status);
-  const canShowDroneSelector = canCalculateRoute || status === "calculado";
+  const isRouteCalculationAvailable = isPedidoSelectable(status) && canCalculateRoute;
+  const canShowDroneSelector = isPedidoSelectable(status) || status === "calculado";
   const canManualDeliver = status === "em_voo";
   const canAbortSimulation =
     rotaId !== null && rotaId !== undefined && (status === "despachado" || status === "em_voo");
@@ -164,7 +168,7 @@ export function StatusControl({
         ) : null}
 
         <div className={ACTION_ROW_CLASS_NAME}>
-          {canCalculateRoute ? (
+          {isRouteCalculationAvailable ? (
             <Button
               type="button"
               className={renderDisabledClass(false, PRIMARY_BUTTON_CLASS_NAME)}
@@ -172,6 +176,15 @@ export function StatusControl({
               onClick={onCalcularRota}
             >
               {isCalculatingRoute ? "Calculando..." : "Calcular Rota"}
+            </Button>
+          ) : isPedidoSelectable(status) ? (
+            <Button
+              type="button"
+              className={renderDisabledClass(true, PRIMARY_BUTTON_CLASS_NAME)}
+              disabled
+              title={routeCalculationBlockedReason ?? undefined}
+            >
+              {routeCalculationBlockedReason ?? "Calcular Rota"}
             </Button>
           ) : null}
 
@@ -260,6 +273,16 @@ export function StatusControl({
             Modo Replay
           </Button>
         </div>
+
+        {!isRouteCalculationAvailable && isPedidoSelectable(status) ? (
+          <div className="flex items-start gap-2 rounded-[var(--radius-md)] border border-[rgba(245,158,11,0.3)] bg-[rgba(245,158,11,0.12)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[rgba(245,158,11,0.95)]" />
+            <span>
+              {routeCalculationBlockedReason ??
+                "Nao ha deposito ativo para calcular rotas no momento."}
+            </span>
+          </div>
+        ) : null}
       </section>
 
       <section className={SECTION_CLASS_NAME} aria-label="Estados do pedido">

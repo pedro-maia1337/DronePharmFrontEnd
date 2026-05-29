@@ -71,3 +71,19 @@ export function atualizarStatusDrone(
     },
   );
 }
+
+export function reativarDrone(
+  id: string,
+  bateriaPct = 1,
+): Promise<void> {
+  const searchParams = new URLSearchParams({
+    bateria_pct: String(bateriaPct),
+  });
+
+  return apiFetch<void>(
+    `/api/v1/frota/${id}/reativar?${searchParams.toString()}`,
+    {
+      method: "POST",
+    },
+  );
+}

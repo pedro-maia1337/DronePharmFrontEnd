@@ -12,6 +12,10 @@ export function listFarmacias(): Promise<FarmaciaListResponse> {
   return apiFetch<FarmaciaListResponse>(`${FARMACIAS_BASE_PATH}/`);
 }
 
+export function getDepositoFarmacia(): Promise<FarmaciaResponse> {
+  return apiFetch<FarmaciaResponse>(`${FARMACIAS_BASE_PATH}/deposito`);
+}
+
 export function getFarmacia(id: number): Promise<FarmaciaResponse> {
   return apiFetch<FarmaciaResponse>(`${FARMACIAS_BASE_PATH}/${id}`);
 }
