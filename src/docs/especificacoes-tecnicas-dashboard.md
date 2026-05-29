@@ -4,7 +4,7 @@
 
 ---
 
-## 1. Sistema de Bateria e Gestão de Drones
+## 1. Sistema de Bateria e Gestão de Drones - Feito
 
 **Objetivo:** Criar interface de gerenciamento individual dos drones com foco no controle do estado da bateria.
 
@@ -69,7 +69,7 @@ Implementar um theme provider que suporte a alternância completa entre modo cla
 - Especificar melhor os pontos de melhoria.
 - Basear o design no preview contidos no docs
 
-## 4. Atualizar ORM
+## 4. Atualizar ORM - Feito
 
 Foi realizada uma alteração na estrutura do banco de dados: a tabela farmacias agora possui um novo campo obrigatório e único chamado cnpj (tipo texto, contendo os 14 dígitos numéricos do CNPJ).
 
