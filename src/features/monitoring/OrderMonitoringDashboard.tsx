@@ -129,7 +129,7 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return "Nao foi possivel carregar o pedido.";
+  return "Não foi possível carregar o pedido.";
 }
 
 function isNotFoundError(error: unknown): boolean {
@@ -245,10 +245,10 @@ function renderProgressSection(
 
   return (
     <section className={SECTION_CLASS_NAME} aria-label="Progresso do trajeto">
-      <div className={SECTION_TITLE_CLASS_NAME}>Progresso do Trajeto</div>
+      <div className={SECTION_TITLE_CLASS_NAME}>Progresso do trajeto</div>
       <div className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--surface-border)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-card)]">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-[var(--text-secondary)]">Conclusao</span>
+          <span className="text-sm text-[var(--text-secondary)]">Conclusão</span>
           <span className="font-mono text-sm tabular-nums text-[var(--text-primary)]">
             {progressPct === null ? "--" : `${progressPct}%`}
           </span>
@@ -614,11 +614,11 @@ export function OrderMonitoringDashboard({
   const depositoDisponivel = depositoAtual !== null;
   const depositoBloqueado = depositoQuery.isError && isNotFoundError(depositoQuery.error);
   const routeCalculationBlockedReason = depositoBloqueado
-    ? "Nenhum deposito ativo cadastrado. Reative ou crie a farmacia-polo antes de calcular rotas."
+    ? "Nenhum depósito ativo cadastrado. Reative ou crie a farmácia-polo antes de calcular rotas."
     : depositoQuery.isLoading
-      ? "Verificando o deposito principal..."
+      ? "Verificando o depósito principal..."
       : depositoQuery.isError
-        ? "Nao foi possivel validar o deposito principal."
+        ? "Não foi possível validar o depósito principal."
         : null;
   const routeCalculationAvailable =
     depositoDisponivel &&
@@ -734,7 +734,7 @@ export function OrderMonitoringDashboard({
 
     if (lastEvent.evento === "pedido_entregue" || nextStatus === "entregue") {
       dispatchMonitoringUi({ type: "show_completion_banner" });
-      toast.success("Missao concluida com sucesso.");
+      toast.success("Missão concluída com sucesso.");
       window.setTimeout(() => {
         dispatchMonitoringUi({ type: "hide_completion_banner" });
       }, COMPLETION_BANNER_DURATION_MS);
@@ -798,14 +798,14 @@ export function OrderMonitoringDashboard({
 
   async function handleCalcularRota(): Promise<void> {
     if (selectedDroneId.trim().length === 0) {
-      toast.error("Selecione um drone disponivel para calcular a rota.");
+      toast.error("Selecione um drone disponível para calcular a rota.");
       return;
     }
 
     if (!routeCalculationAvailable) {
       toast.error(
         routeCalculationBlockedReason ??
-          "Nao foi possivel validar o deposito principal para calcular a rota.",
+          "Não foi possível validar o depósito principal para calcular a rota.",
       );
       return;
     }
@@ -876,7 +876,7 @@ export function OrderMonitoringDashboard({
     const rotaId = pedidoQuery.data?.rota_id;
 
     if (rotaId === null || rotaId === undefined) {
-      toast.error("Calcule uma rota antes de iniciar a simulacao.");
+      toast.error("Calcule uma rota antes de iniciar a simulação.");
       return;
     }
 
@@ -885,7 +885,7 @@ export function OrderMonitoringDashboard({
       await simularRotaAgora(rotaId);
       dispatchMonitoringUi({ type: "set_status_override", status: "em_voo" });
       await refreshQueries();
-      toast.success("Simulacao iniciada imediatamente.");
+      toast.success("Simulação iniciada imediatamente.");
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -904,7 +904,7 @@ export function OrderMonitoringDashboard({
       await abortarRota(activeRotaId);
       dispatchMonitoringUi({ type: "set_status_override", status: "pendente" });
       await refreshQueries();
-      toast.success("Simulacao abortada e drone liberado.");
+      toast.success("Simulação abortada e drone liberado.");
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -947,7 +947,7 @@ export function OrderMonitoringDashboard({
       <aside className={SIDEBAR_CLASS_NAME}>
         {monitoringUiState.completionBannerVisible ? (
           <div className={COMPLETION_BANNER_CLASS_NAME}>
-            Missao encerrada. Drone liberado e pedido concluido.
+            Missão encerrada. Drone liberado e pedido concluído.
           </div>
         ) : null}
         {depositoBloqueado ? (
@@ -957,15 +957,15 @@ export function OrderMonitoringDashboard({
             </span>
             <div className="flex flex-1 flex-col gap-1">
               <strong className="text-[var(--text-primary)]">
-                Deposito principal ausente
+                Depósito principal ausente
               </strong>
               <span>
-                Sem uma farmacia-polo ativa, o backend retorna 404 ao calcular
-                rotas. Reative ou recrie o deposito para liberar a operacao.
+                Sem uma farmácia-polo ativa, o backend retorna 404 ao calcular
+                rotas. Reative ou recrie o depósito para liberar a operação.
               </span>
             </div>
             <Button asChild variant="outline" size="sm">
-              <Link to="/farmacias">Abrir farmacias</Link>
+              <Link to="/farmacias">Abrir farmácias</Link>
             </Button>
           </div>
         ) : null}

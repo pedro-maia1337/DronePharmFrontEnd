@@ -64,7 +64,7 @@ function getCloseMessage(event: CloseEvent): string {
     return event.reason;
   }
 
-  return `Conexao encerrada (codigo ${event.code}).`;
+  return `Conexão encerrada (código ${event.code}).`;
 }
 
 export function usePedidoStream(enabled: boolean): PedidoStreamState {
@@ -126,7 +126,7 @@ export function usePedidoStream(enabled: boolean): PedidoStreamState {
 
       if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
         setConnected(false);
-        setError(message ?? "Nao foi possivel reconectar ao stream de pedidos.");
+        setError(message ?? "Não foi possível reconectar ao stream de pedidos.");
         return;
       }
 
@@ -215,7 +215,7 @@ export function usePedidoStream(enabled: boolean): PedidoStreamState {
           caughtError instanceof Error
             ? caughtError.message
             : "Falha desconhecida ao abrir WebSocket de pedidos.";
-        scheduleReconnect(`Nao foi possivel iniciar o stream de pedidos: ${message}`);
+        scheduleReconnect(`Não foi possível iniciar o stream de pedidos: ${message}`);
       }
     };
 

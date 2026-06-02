@@ -76,8 +76,8 @@ const BODY_CELL_CLASS_NAME =
 const DATA_FONT_CLASS_NAME = "[font-family:var(--font-data)]";
 const EMPTY_STATE_CLASS_NAME =
   "flex min-h-[140px] items-center justify-center px-6 py-10 text-center text-sm text-[var(--text-muted)]";
-const ERROR_TITLE = "Erro de Conexao";
-const ERROR_MESSAGE = "Nao foi possivel carregar os indicadores.";
+const ERROR_TITLE = "Erro de Conexão";
+const ERROR_MESSAGE = "Não foi possível carregar os indicadores.";
 
 type DroneFilterValue = "todos" | string;
 type FarmaciaFilterValue = "todas" | `${number}`;
@@ -201,7 +201,7 @@ function FarmaciaCharts({ kpis }: { kpis: KpiFarmaciaResponse[] }): ReactElement
   const linePoints = getLinePoints(chartPoints);
 
   if (chartPoints.length === 0) {
-    return <div className={EMPTY_STATE_CLASS_NAME}>Nenhuma entrega por farmacia</div>;
+    return <div className={EMPTY_STATE_CLASS_NAME}>Nenhuma entrega por farmácia</div>;
   }
 
   return (
@@ -209,7 +209,7 @@ function FarmaciaCharts({ kpis }: { kpis: KpiFarmaciaResponse[] }): ReactElement
       <header className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold text-[var(--text-primary)]">
-            Desempenho por farmacia
+            Desempenho por farmácia
           </h2>
           <p className={DESCRIPTION_CLASS_NAME}>
             Pontualidade e volume de entregas por unidade
@@ -222,7 +222,7 @@ function FarmaciaCharts({ kpis }: { kpis: KpiFarmaciaResponse[] }): ReactElement
         <svg
           viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
           role="img"
-          aria-label="Pontualidade por farmacia"
+          aria-label="Pontualidade por farmácia"
           className="h-[220px] w-full rounded-[var(--radius-md)] border border-[var(--surface-border)] bg-[var(--surface-panel)]"
         >
           <line
@@ -477,7 +477,7 @@ export function KpiDashboard(): ReactElement {
           <div>
             <h1 className={TITLE_CLASS_NAME}>KPIs</h1>
             <p className={DESCRIPTION_CLASS_NAME}>
-              Historico e operacao atual
+              Histórico e operação atual
             </p>
           </div>
           <Button
@@ -511,13 +511,13 @@ export function KpiDashboard(): ReactElement {
             icon={<Activity className="size-4" aria-hidden="true" />}
           />
           <MetricCard
-            label="Tempo medio"
+            label="Tempo médio"
             value={`${formatNumber(kpisGerais?.tempo_medio_min ?? 0)} min`}
             helper="Por entrega"
             icon={<Clock3 className="size-4" aria-hidden="true" />}
           />
           <MetricCard
-            label="Distancia media"
+            label="Distância média"
             value={`${formatNumber(kpisGerais?.distancia_media_km ?? 0)} km`}
             helper="Por entrega"
             icon={<RouteIcon className="size-4" aria-hidden="true" />}
@@ -540,11 +540,11 @@ export function KpiDashboard(): ReactElement {
           <MetricCard
             label="Em voo"
             value={formatInteger(kpisTempoReal?.pedidos_em_voo ?? 0)}
-            helper="Pedidos em missao"
+            helper="Pedidos em missão"
             icon={<RouteIcon className="size-4" aria-hidden="true" />}
           />
           <MetricCard
-            label="Concluidos"
+            label="Concluídos"
             value={formatInteger(kpisTempoReal?.concluidos ?? 0)}
             helper="Pedidos entregues"
             icon={<PackageCheck className="size-4" aria-hidden="true" />}
@@ -552,11 +552,11 @@ export function KpiDashboard(): ReactElement {
           <MetricCard
             label="Pontualidade"
             value={`${formatNumber(kpisTempoReal?.pontualidade_pct ?? 0)}%`}
-            helper="Base historica"
+            helper="Base histórica"
             icon={<Activity className="size-4" aria-hidden="true" />}
           />
           <MetricCard
-            label="ETA medio"
+            label="ETA médio"
             value={formatEta(kpisTempoReal?.eta_medio_seg ?? 0)}
             helper="Pedidos em rota"
             icon={<Clock3 className="size-4" aria-hidden="true" />}
@@ -569,7 +569,7 @@ export function KpiDashboard(): ReactElement {
           <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-base font-semibold text-[var(--text-primary)]">
-                Historico de entregas
+                Histórico de entregas
               </h2>
               <p className={DESCRIPTION_CLASS_NAME}>
                 {historico.length} registro(s) encontrado(s)
@@ -599,7 +599,7 @@ export function KpiDashboard(): ReactElement {
                   onChange={handleFarmaciaChange}
                   className={FILTER_SELECT_CLASS_NAME}
                 >
-                  <option value="todas">Todas as farmacias</option>
+                  <option value="todas">Todas as farmácias</option>
                   {farmaciasAtivas.map((farmacia) => (
                     <option key={farmacia.id} value={String(farmacia.id)}>
                       {farmacia.nome}
@@ -622,9 +622,9 @@ export function KpiDashboard(): ReactElement {
                       <th className={HEAD_CELL_CLASS_NAME}>Pedido</th>
                       <th className={HEAD_CELL_CLASS_NAME}>Rota</th>
                       <th className={HEAD_CELL_CLASS_NAME}>Drone</th>
-                      <th className={HEAD_CELL_CLASS_NAME}>Farmacia</th>
+                      <th className={HEAD_CELL_CLASS_NAME}>Farmácia</th>
                       <th className={HEAD_CELL_CLASS_NAME}>Peso</th>
-                      <th className={HEAD_CELL_CLASS_NAME}>Distancia</th>
+                      <th className={HEAD_CELL_CLASS_NAME}>Distância</th>
                       <th className={HEAD_CELL_CLASS_NAME}>Tempo</th>
                       <th className={HEAD_CELL_CLASS_NAME}>Prazo</th>
                       <th className={HEAD_CELL_CLASS_NAME}>Registrado em</th>

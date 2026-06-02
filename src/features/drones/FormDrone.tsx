@@ -43,7 +43,7 @@ const FOOTER_ACTIONS_CLASS_NAME = "flex items-center justify-end gap-3";
 const DRONES_ROUTE_PATH = "/drones";
 const FIRMWARE_HINT =
   "Use o mesmo identificador configurado no firmware e na telemetria.";
-const SAVE_ERROR_MESSAGE = "Nao foi possivel registrar o drone.";
+const SAVE_ERROR_MESSAGE = "Não foi possível registrar o drone.";
 
 type DroneFieldName = keyof DroneFormData;
 
@@ -206,7 +206,7 @@ export function FormDrone(): ReactElement {
         <header className="flex flex-col gap-1">
           <h1 className={TITLE_CLASS_NAME}>Novo Drone</h1>
           <p className={DESCRIPTION_CLASS_NAME}>
-            Cadastre uma nova unidade da frota para operacao e telemetria.
+            Cadastre uma nova unidade da frota para operação e telemetria.
           </p>
         </header>
 
@@ -216,7 +216,7 @@ export function FormDrone(): ReactElement {
           className="flex flex-col gap-6"
         >
           <section className={CARD_CLASS_NAME}>
-            <h2 className={CARD_TITLE_CLASS_NAME}>Identificacao</h2>
+            <h2 className={CARD_TITLE_CLASS_NAME}>Identificação</h2>
 
             <div className={GRID_TWO_COLUMNS_CLASS_NAME}>
               <FormInput
@@ -241,7 +241,7 @@ export function FormDrone(): ReactElement {
           </section>
 
           <section className={CARD_CLASS_NAME}>
-            <h2 className={CARD_TITLE_CLASS_NAME}>Especificacoes Tecnicas</h2>
+            <h2 className={CARD_TITLE_CLASS_NAME}>Especificações Técnicas</h2>
 
             <div className={GRID_THREE_COLUMNS_CLASS_NAME}>
               <FormInput
@@ -254,7 +254,7 @@ export function FormDrone(): ReactElement {
                 {...register("autonomia_km")}
               />
               <FormInput
-                label="Carga maxima"
+                label="Carga máxima"
                 required
                 type="number"
                 suffix="kg"

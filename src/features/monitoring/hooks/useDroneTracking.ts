@@ -123,7 +123,7 @@ export function useDroneTracking(droneId: string): DroneTrackingState {
         setStreamState(
           droneId,
           false,
-          message ?? "Nao foi possivel reconectar ao stream de telemetria.",
+          message ?? "Não foi possível reconectar ao stream de telemetria.",
         );
         return;
       }
@@ -211,7 +211,7 @@ export function useDroneTracking(droneId: string): DroneTrackingState {
             ? caughtError.message
             : "Falha desconhecida ao abrir WebSocket.";
 
-        scheduleReconnect(`Nao foi possivel iniciar o stream: ${message}`);
+        scheduleReconnect(`Não foi possível iniciar o stream: ${message}`);
       }
     };
 

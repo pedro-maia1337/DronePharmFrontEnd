@@ -61,21 +61,21 @@ const ROOT_ERROR_CLASS_NAME =
 const FOOTER_ACTIONS_CLASS_NAME =
   "flex items-center justify-end gap-3";
 const QUERY_STALE_TIME = 10_000;
-const CNPJ_HINT = "Informe apenas os 14 digitos numericos do CNPJ.";
+const CNPJ_HINT = "Informe apenas os 14 dígitos numéricos do CNPJ.";
 const UF_HINT = "Use a sigla da unidade federativa, como MG ou SP.";
 const DECIMAL_COORDINATE_HINT =
-  "Use coordenadas decimais WGS84 com ate 15 casas decimais.";
+  "Use coordenadas decimais WGS84 com até 15 casas decimais.";
 const COORDINATE_INPUT_MODE = "decimal";
-const CREATE_MODE_TITLE = "Nova Farmacia";
-const EDIT_MODE_TITLE = "Editar Farmacia";
+const CREATE_MODE_TITLE = "Nova Farmácia";
+const EDIT_MODE_TITLE = "Editar Farmácia";
 const CREATE_MODE_DESCRIPTION =
   "Cadastre a unidade de origem para uso operacional nas entregas.";
 const EDIT_MODE_DESCRIPTION =
-  "Atualize os dados cadastrais e de operacao da farmacia.";
-const CREATE_SUCCESS_MESSAGE = "Farmacia criada com sucesso.";
-const UPDATE_SUCCESS_MESSAGE = "Farmacia atualizada com sucesso.";
-const GENERIC_ERROR_MESSAGE = "Nao foi possivel salvar a farmacia.";
-const INVALID_ID_ERROR_MESSAGE = "O identificador da farmacia e invalido.";
+  "Atualize os dados cadastrais e de operação da farmácia.";
+const CREATE_SUCCESS_MESSAGE = "Farmácia criada com sucesso.";
+const UPDATE_SUCCESS_MESSAGE = "Farmácia atualizada com sucesso.";
+const GENERIC_ERROR_MESSAGE = "Não foi possível salvar a farmácia.";
+const INVALID_ID_ERROR_MESSAGE = "O identificador da farmácia é inválido.";
 const MANAGEMENT_ROUTE_PATH = "/farmacias";
 
 type FarmaciaFieldName = keyof FarmaciaFormData;
@@ -123,7 +123,7 @@ function getPageDescription(isEditMode: boolean): string {
 }
 
 function getSubmitLabel(isEditMode: boolean): string {
-  return isEditMode ? "Salvar Alteracoes" : "Salvar Farmacia";
+  return isEditMode ? "Salvar Alterações" : "Salvar Farmácia";
 }
 
 function getSuccessMessage(isEditMode: boolean): string {
@@ -235,7 +235,7 @@ function renderTopbar(
       <div className={TOPBAR_CONTENT_CLASS_NAME}>
         <nav aria-label="Breadcrumb" className={BREADCRUMB_CLASS_NAME}>
           <Link to={MANAGEMENT_ROUTE_PATH} className={BREADCRUMB_LINK_CLASS_NAME}>
-            Farmacias
+            Farmácias
           </Link>
           <span className="text-[var(--text-muted)]">/</span>
           <span className={BREADCRUMB_CURRENT_CLASS_NAME}>
@@ -262,7 +262,7 @@ function renderQueryError(message: string): ReactElement {
       <div className={CONTENT_CLASS_NAME}>
         <div className="rounded-[var(--radius-lg)] border border-[var(--status-danger)] bg-[var(--surface-card)] p-6">
           <h1 className="mb-2 text-lg font-semibold text-[var(--text-primary)]">
-            Falha ao carregar farmacia
+            Falha ao carregar farmácia
           </h1>
           <p className="text-sm text-[var(--text-secondary)]">{message}</p>
         </div>
@@ -409,7 +409,7 @@ export function FormFarmacia(): ReactElement {
           className="flex flex-col gap-6"
         >
           <section className={CARD_CLASS_NAME}>
-            <h2 className={CARD_TITLE_CLASS_NAME}>Identificacao</h2>
+            <h2 className={CARD_TITLE_CLASS_NAME}>Identificação</h2>
             <div className="flex flex-col gap-4">
               <FormInput
                 label="CNPJ"
@@ -427,13 +427,13 @@ export function FormFarmacia(): ReactElement {
                 label="Nome"
                 required
                 error={errors.nome}
-                placeholder="Farmacia Popular Centro"
+                placeholder="Farmácia Popular Centro"
                 autoComplete="off"
                 {...register("nome")}
               />
 
               <FormInput
-                label="Endereco"
+                label="Endereço"
                 required
                 error={errors.endereco}
                 placeholder="Av. Afonso Pena, 1234"
@@ -466,7 +466,7 @@ export function FormFarmacia(): ReactElement {
           </section>
 
           <section className={CARD_CLASS_NAME}>
-            <h2 className={CARD_TITLE_CLASS_NAME}>Localizacao de Origem</h2>
+            <h2 className={CARD_TITLE_CLASS_NAME}>Localização de Origem</h2>
             <div className={GRID_TWO_COLUMNS_CLASS_NAME}>
               <FormInput
                 label="Latitude"
@@ -494,7 +494,7 @@ export function FormFarmacia(): ReactElement {
           </section>
 
           <section className={CARD_CLASS_NAME}>
-            <h2 className={CARD_TITLE_CLASS_NAME}>Configuracoes</h2>
+            <h2 className={CARD_TITLE_CLASS_NAME}>Configurações</h2>
 
             <div className="flex flex-col gap-4">
               <Controller
@@ -512,10 +512,10 @@ export function FormFarmacia(): ReactElement {
                     >
                       <div className="flex flex-col gap-1">
                         <span className={SWITCH_LABEL_TITLE_CLASS_NAME}>
-                          Farmacia deposito
+                          Farmácia depósito
                         </span>
                         <span className={SWITCH_LABEL_DESCRIPTION_CLASS_NAME}>
-                          Define a unidade como polo principal de operacao.
+                          Define a unidade como polo principal de operação.
                         </span>
                       </div>
 
@@ -551,10 +551,10 @@ export function FormFarmacia(): ReactElement {
                     >
                       <div className="flex flex-col gap-1">
                         <span className={SWITCH_LABEL_TITLE_CLASS_NAME}>
-                          Farmacia ativa
+                          Farmácia ativa
                         </span>
                         <span className={SWITCH_LABEL_DESCRIPTION_CLASS_NAME}>
-                          Mantem a unidade disponivel para operacao e origem de pedidos.
+                          Mantém a unidade disponível para operação e origem de pedidos.
                         </span>
                       </div>
 

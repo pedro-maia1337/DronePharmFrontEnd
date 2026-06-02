@@ -37,7 +37,7 @@ function createCoordinateSchema(
   fieldLabel: string,
 ) {
   const rangeMessage = `A ${fieldLabel} deve estar entre ${minValue} e ${maxValue}.`;
-  const precisionMessage = `A ${fieldLabel} deve ter no maximo ${COORDINATE_DECIMAL_PLACES} casas decimais.`;
+  const precisionMessage = `A ${fieldLabel} deve ter no máximo ${COORDINATE_DECIMAL_PLACES} casas decimais.`;
 
   return z
     .string()
@@ -47,7 +47,7 @@ function createCoordinateSchema(
     })
     .transform(parseCoordinate)
     .refine((value) => Number.isFinite(value), {
-      message: `A ${fieldLabel} deve ser um numero valido.`,
+      message: `A ${fieldLabel} deve ser um número válido.`,
     })
     .refine((value) => value >= minValue && value <= maxValue, {
       message: rangeMessage,
@@ -57,20 +57,20 @@ function createCoordinateSchema(
 export const pedidoItemSchema = z.object({
   farmacia_id: z
     .coerce.number({
-      error: "A farmacia de origem deve ser um numero valido.",
+      error: "A farmácia de origem deve ser um número válido.",
     })
-    .int("A farmacia de origem deve ser um numero inteiro.")
-    .positive("Selecione uma farmacia de origem valida."),
+    .int("A farmácia de origem deve ser um número inteiro.")
+    .positive("Selecione uma farmácia de origem válida."),
   latitude: createCoordinateSchema(LATITUDE_MIN, LATITUDE_MAX, "latitude"),
   longitude: createCoordinateSchema(LONGITUDE_MIN, LONGITUDE_MAX, "longitude"),
   peso_kg: z
     .coerce.number({
-      error: "O peso deve ser um numero valido.",
+      error: "O peso deve ser um número válido.",
     })
     .positive("O peso deve ser maior que zero.")
-    .max(PEDIDO_PESO_MAXIMO_KG, "O peso do pedido nao pode ultrapassar 2 kg.")
+    .max(PEDIDO_PESO_MAXIMO_KG, "O peso do pedido não pode ultrapassar 2 kg.")
     .refine(hasAtMostWeightDecimalPlaces, {
-      message: "O peso deve ter no maximo 2 casas decimais.",
+      message: "O peso deve ter no máximo 2 casas decimais.",
     }),
   prioridade: z.coerce.number().pipe(
     z.union(
@@ -87,13 +87,13 @@ export const pedidoItemSchema = z.object({
   descricao: z
     .string()
     .trim()
-    .max(DESCRICAO_MAX_LENGTH, "A descricao deve ter no maximo 300 caracteres.")
+    .max(DESCRICAO_MAX_LENGTH, "A descrição deve ter no máximo 300 caracteres.")
     .optional(),
   janela_fim: z
     .string()
     .trim()
     .refine(isIsoDateTime, {
-      message: "A janela final deve estar em formato ISO 8601 valido.",
+      message: "A janela final deve estar em formato ISO 8601 válido.",
     })
     .optional()
     .or(z.literal("")),

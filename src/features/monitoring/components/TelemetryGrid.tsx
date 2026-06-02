@@ -218,13 +218,13 @@ function buildMetricCards(
     },
     {
       key: "direcao",
-      label: "Direcao",
+      label: "Direção",
       value: getDirectionValue(monitoramento),
       unit: "°",
     },
     {
       key: "missao",
-      label: "Missao",
+      label: "Missão",
       value: getMissionValue(monitoramento),
     },
   ];

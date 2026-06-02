@@ -11,7 +11,7 @@ export default function DroneListPage(): ReactElement {
       <div className={CARD_CLASS_NAME}>
         <h1 className="text-xl font-semibold text-foreground">Drones</h1>
         <p className="text-sm text-muted-foreground">
-          A rota de gestao de drones foi configurada e esta pronta para evolucao.
+          A rota de gestão de drones foi configurada e está pronta para evolução.
         </p>
       </div>
     </section>

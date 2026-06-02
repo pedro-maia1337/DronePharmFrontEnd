@@ -231,7 +231,7 @@ function getMapLabel(
   }
 
   if (latitude === null || longitude === null) {
-    return "Aguardando posicao do drone";
+    return "Aguardando posição do drone";
   }
 
   const altitudeLabel = altitude === null ? "--" : altitude.toFixed(0);
@@ -295,7 +295,7 @@ const StaticRouteLayer = memo(function StaticRouteLayer({
       {depot !== null ? (
         <Marker position={depot} icon={ORIGIN_ICON}>
           <Tooltip direction="top" offset={[0, -8]}>
-            Deposito
+            Depósito
           </Tooltip>
         </Marker>
       ) : routePoints[0] !== undefined ? (
@@ -406,7 +406,7 @@ const DroneMarkerLayer = memo(function DroneMarkerLayer({
   return (
     <Marker position={animatedPosition} icon={droneIcon}>
       <Tooltip direction="top" offset={[0, -10]}>
-        {signalLost ? "Sinal do drone indisponivel" : "Drone em operacao"}
+        {signalLost ? "Sinal do drone indisponível" : "Drone em operação"}
       </Tooltip>
     </Marker>
   );

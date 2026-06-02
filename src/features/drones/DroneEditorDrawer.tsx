@@ -67,8 +67,8 @@ const STATUS_OPTIONS: Array<{ label: string; value: StatusDroneEnum }> = [
   { label: "Em voo", value: "em_voo" },
   { label: "Retornando", value: "retornando" },
   { label: "Carregando", value: "carregando" },
-  { label: "Manutencao", value: "manutencao" },
-  { label: "Emergencia", value: "emergencia" },
+  { label: "Manutenção", value: "manutencao" },
+  { label: "Emergência", value: "emergencia" },
 ];
 
 interface DroneEditorDrawerProps {
@@ -81,7 +81,7 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return "Nao foi possivel carregar o drone.";
+  return "Não foi possível carregar o drone.";
 }
 
 function clampBatteryPercent(value: number): number {
@@ -186,7 +186,7 @@ function DroneEditorDrawerContent({
       toast.success("Drone atualizado com sucesso.");
     } catch (error) {
       setActionError(getErrorMessage(error));
-      toast.error("Nao foi possivel salvar o drone.");
+      toast.error("Não foi possível salvar o drone.");
     } finally {
       if (mountedRef.current) {
         setIsSaving(false);
@@ -242,10 +242,10 @@ function DroneEditorDrawerContent({
         setChargeProgress(100);
       }
 
-      toast.success("Recarga concluida. Drone reativado com bateria cheia.");
+      toast.success("Recarga concluída. Drone reativado com bateria cheia.");
     } catch (error) {
       setActionError(getErrorMessage(error));
-      toast.error("Nao foi possivel concluir a recarga.");
+      toast.error("Não foi possível concluir a recarga.");
     } finally {
       if (mountedRef.current) {
         setIsCharging(false);
@@ -292,7 +292,7 @@ function DroneEditorDrawerContent({
 
       <div className="flex-1 overflow-y-auto">
         <section className={SECTION_CLASS_NAME}>
-          <div className={SECTION_TITLE_CLASS_NAME}>Visao geral</div>
+          <div className={SECTION_TITLE_CLASS_NAME}>Visão geral</div>
           <div className={GRID_CLASS_NAME}>
             <div className={METRIC_CARD_CLASS_NAME}>
               <div className={METRIC_LABEL_CLASS_NAME}>Bateria atual</div>
@@ -331,7 +331,7 @@ function DroneEditorDrawerContent({
         </section>
 
         <section className={SECTION_CLASS_NAME}>
-          <div className={SECTION_TITLE_CLASS_NAME}>Edicao manual</div>
+          <div className={SECTION_TITLE_CLASS_NAME}>Edição manual</div>
 
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
@@ -401,7 +401,7 @@ function DroneEditorDrawerContent({
         </section>
 
         <section className={SECTION_CLASS_NAME}>
-          <div className={SECTION_TITLE_CLASS_NAME}>Acao rapida</div>
+          <div className={SECTION_TITLE_CLASS_NAME}>Ação rápida</div>
           <div className={ACTION_ROW_CLASS_NAME}>
             <Button
               type="button"
@@ -454,7 +454,7 @@ function DroneEditorDrawerContent({
         ) : null}
 
         <section className={SECTION_CLASS_NAME}>
-          <div className={SECTION_TITLE_CLASS_NAME}>Posicao atual</div>
+          <div className={SECTION_TITLE_CLASS_NAME}>Posição atual</div>
           <div className={GRID_CLASS_NAME}>
             <div className={METRIC_CARD_CLASS_NAME}>
               <div className={METRIC_LABEL_CLASS_NAME}>Latitude</div>
@@ -490,7 +490,7 @@ function DroneEditorDrawerContent({
               void handleSave();
             }}
           >
-            {isSaving ? "Salvando..." : "Salvar alteracoes"}
+            {isSaving ? "Salvando..." : "Salvar alterações"}
           </Button>
         </div>
       </div>

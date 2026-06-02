@@ -11,7 +11,7 @@ export default function PedidoListPage(): ReactElement {
       <div className={CARD_CLASS_NAME}>
         <h1 className="text-xl font-semibold text-foreground">Pedidos</h1>
         <p className="text-sm text-muted-foreground">
-          A estrutura de roteamento para a listagem de pedidos esta pronta.
+          A estrutura de roteamento para a listagem de pedidos está pronta.
         </p>
       </div>
     </section>

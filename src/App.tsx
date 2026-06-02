@@ -74,10 +74,10 @@ function NotFoundRoute(): ReactElement {
     <div className="flex min-h-[calc(100dvh-56px)] items-center justify-center bg-[var(--surface-base)] p-6">
       <div className="flex max-w-md flex-col gap-4 rounded-[var(--radius-lg)] border border-[var(--surface-border)] bg-[var(--surface-card)] p-6 text-center shadow-[var(--shadow-card)]">
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-          Rota nao encontrada
+          Rota não encontrada
         </h2>
         <p className="text-sm text-[var(--text-secondary)]">
-          A URL informada nao corresponde a nenhuma tela do DronePharm.
+          A URL informada não corresponde a nenhuma tela do DronePharm.
         </p>
         <Button asChild>
           <Link to="/monitoramento">Ir para monitoramento</Link>

@@ -53,12 +53,12 @@ const COORDINATE_INPUT_MODE = "decimal";
 const WEIGHT_DECIMAL_PLACES = 2;
 const WEIGHT_INPUT_STEP = "0.01";
 const DECIMAL_COORDINATE_HINT =
-  "Use coordenadas decimais WGS84 com ate 15 casas decimais.";
-const DECIMAL_WEIGHT_HINT = "Use peso em kg com ate duas casas decimais.";
+  "Use coordenadas decimais WGS84 com até 15 casas decimais.";
+const DECIMAL_WEIGHT_HINT = "Use peso em kg com até duas casas decimais.";
 const DELIVERY_WINDOW_HINT =
-  "Se nao for informada, a janela final sera calculada automaticamente pela prioridade.";
-const LOAD_ERROR_MESSAGE = "Nao foi possivel carregar as farmacias.";
-const SAVE_ERROR_MESSAGE = "Nao foi possivel salvar o lote de pedidos.";
+  "Se não for informada, a janela final será calculada automaticamente pela prioridade.";
+const LOAD_ERROR_MESSAGE = "Não foi possível carregar as farmácias.";
+const SAVE_ERROR_MESSAGE = "Não foi possível salvar o lote de pedidos.";
 
 type PedidoFieldName = keyof PedidoFormItemData;
 
@@ -183,7 +183,7 @@ function renderQueryError(message: string): ReactElement {
       <div className={CONTENT_CLASS_NAME}>
         <div className="rounded-[var(--radius-lg)] border border-[var(--status-danger)] bg-[var(--surface-card)] p-6">
           <h1 className="mb-2 text-lg font-semibold text-[var(--text-primary)]">
-            Falha ao carregar farmacias
+            Falha ao carregar farmácias
           </h1>
           <p className="text-sm text-[var(--text-secondary)]">{message}</p>
         </div>
@@ -384,11 +384,11 @@ export function FormPedido(): ReactElement {
                       <h4 className={CARD_TITLE_CLASS_NAME}>Destino</h4>
                       <div className="flex flex-col gap-4">
                         <FormSelect
-                          label="Farmacia de origem"
+                          label="Farmácia de origem"
                           name={`pedidos.${index}.farmacia_id`}
                           control={control}
                           options={farmaciasAtivasOptions}
-                          placeholder="Selecione uma farmacia ativa"
+                          placeholder="Selecione uma farmácia ativa"
                           required
                           disabled={farmaciasAtivasOptions.length === 0}
                         />
@@ -436,7 +436,7 @@ export function FormPedido(): ReactElement {
                             {...register(`pedidos.${index}.peso_kg`)}
                           />
                           <FormInput
-                            label="Descricao"
+                            label="Descrição"
                             error={getFieldError(errors.pedidos?.[index]?.descricao)}
                             placeholder="Insulina - UBS Centro"
                             autoComplete="off"

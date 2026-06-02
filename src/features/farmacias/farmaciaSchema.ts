@@ -27,7 +27,7 @@ function createCoordinateSchema(
   fieldLabel: string,
 ) {
   const rangeMessage = `A ${fieldLabel} deve estar entre ${minValue} e ${maxValue}.`;
-  const precisionMessage = `A ${fieldLabel} deve ter no maximo ${COORDINATE_DECIMAL_PLACES} casas decimais.`;
+  const precisionMessage = `A ${fieldLabel} deve ter no máximo ${COORDINATE_DECIMAL_PLACES} casas decimais.`;
 
   return z
     .string()
@@ -37,7 +37,7 @@ function createCoordinateSchema(
     })
     .transform(parseCoordinate)
     .refine((value) => Number.isFinite(value), {
-      message: `A ${fieldLabel} deve ser um numero valido.`,
+      message: `A ${fieldLabel} deve ser um número válido.`,
     })
     .refine((value) => value >= minValue && value <= maxValue, {
       message: rangeMessage,
@@ -50,23 +50,23 @@ export const farmaciaSchema = z.object({
     .trim()
     .transform((value) => value.replace(/\D/g, ""))
     .refine((value) => new RegExp(`^\\d{${CNPJ_LENGTH}}$`).test(value), {
-      message: "O CNPJ deve conter exatamente 14 digitos numericos.",
+      message: "O CNPJ deve conter exatamente 14 dígitos numéricos.",
     }),
   nome: z
     .string()
     .trim()
-    .min(NOME_MIN_LENGTH, "O nome da farmacia deve ter pelo menos 3 caracteres.")
-    .max(NOME_MAX_LENGTH, "O nome da farmacia deve ter no maximo 120 caracteres."),
+    .min(NOME_MIN_LENGTH, "O nome da farmácia deve ter pelo menos 3 caracteres.")
+    .max(NOME_MAX_LENGTH, "O nome da farmácia deve ter no máximo 120 caracteres."),
   endereco: z
     .string()
     .trim()
-    .min(ENDERECO_MIN_LENGTH, "O endereco deve ter pelo menos 5 caracteres.")
-    .max(ENDERECO_MAX_LENGTH, "O endereco deve ter no maximo 300 caracteres."),
+    .min(ENDERECO_MIN_LENGTH, "O endereço deve ter pelo menos 5 caracteres.")
+    .max(ENDERECO_MAX_LENGTH, "O endereço deve ter no máximo 300 caracteres."),
   cidade: z
     .string()
     .trim()
     .min(CIDADE_MIN_LENGTH, "A cidade deve ter pelo menos 2 caracteres.")
-    .max(CIDADE_MAX_LENGTH, "A cidade deve ter no maximo 100 caracteres."),
+    .max(CIDADE_MAX_LENGTH, "A cidade deve ter no máximo 100 caracteres."),
   uf: z
     .string()
     .trim()
@@ -75,10 +75,10 @@ export const farmaciaSchema = z.object({
   latitude: createCoordinateSchema(LATITUDE_MIN, LATITUDE_MAX, "latitude"),
   longitude: createCoordinateSchema(LONGITUDE_MIN, LONGITUDE_MAX, "longitude"),
   deposito: z.boolean({
-    error: "Informe se a farmacia e um deposito.",
+    error: "Informe se a farmácia é um depósito.",
   }),
   ativa: z.boolean({
-    error: "Informe se a farmacia esta ativa.",
+    error: "Informe se a farmácia está ativa.",
   }),
 });
 

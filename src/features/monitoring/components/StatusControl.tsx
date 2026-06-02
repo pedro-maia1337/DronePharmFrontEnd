@@ -133,18 +133,18 @@ export function StatusControl({
               htmlFor="drone-selector"
               className="text-sm font-medium text-[var(--text-secondary)]"
             >
-              Drone de missao
+              Drone de missão
             </label>
             <select
               id="drone-selector"
               name="drone-selector"
-              aria-label="Selecionar drone da missao"
+              aria-label="Selecionar drone da missão"
               className={SELECT_CLASS_NAME}
               value={selectedDroneId}
               onChange={handleDroneChange}
             >
               <option value="" disabled>
-                Selecione um drone disponivel
+                Selecione um drone disponível
               </option>
               {droneOptions.map((drone) => (
                 <option key={drone.value} value={drone.value}>
@@ -159,9 +159,9 @@ export function StatusControl({
           <div className={LOCK_BLOCK_CLASS_NAME}>
             <Lock aria-hidden="true" className="size-4" />
             <div className="flex flex-col">
-              <span className="font-medium">Operacao bloqueada durante voo</span>
+              <span className="font-medium">Operação bloqueada durante voo</span>
               <span className="text-xs opacity-80">
-                Aguardando conclusao da missao
+                Aguardando conclusão da missão
               </span>
             </div>
           </div>
@@ -224,7 +224,7 @@ export function StatusControl({
             disabled={!canAbortSimulation || isAbortingFlight}
             onClick={onAbortarSimulacao}
           >
-            {isAbortingFlight ? "Abortando..." : "Abortar Simulacao"}
+            {isAbortingFlight ? "Abortando..." : "Abortar Simulação"}
           </Button>
 
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -279,7 +279,7 @@ export function StatusControl({
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[rgba(245,158,11,0.95)]" />
             <span>
               {routeCalculationBlockedReason ??
-                "Nao ha deposito ativo para calcular rotas no momento."}
+                "Não há depósito ativo para calcular rotas no momento."}
             </span>
           </div>
         ) : null}

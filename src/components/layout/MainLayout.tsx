@@ -28,7 +28,7 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
   { to: "/kpis", label: "KPIs" },
   { to: "/pedidos", label: "Pedidos", end: true },
   { to: "/pedidos/novo", label: "Novo Pedido" },
-  { to: "/farmacias", label: "Farmacias", end: true },
+  { to: "/farmacias", label: "Farmácias", end: true },
   { to: "/drones", label: "Drones" },
 ];
 

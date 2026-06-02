@@ -52,7 +52,7 @@ const PAGINATION_CLASS_NAME =
 const EMPTY_STATE_CLASS_NAME =
   "flex min-h-[180px] flex-col items-center justify-center gap-4 px-6 py-10 text-center";
 const EMPTY_STATE_MESSAGE = "Nenhum drone cadastrado";
-const LOAD_ERROR_MESSAGE = "Nao foi possivel carregar os drones.";
+const LOAD_ERROR_MESSAGE = "Não foi possível carregar os drones.";
 
 type StatusFilterValue = "todos" | StatusDroneEnum;
 
@@ -233,8 +233,8 @@ export function ListaDrones(): ReactElement {
               <option value="em_voo">Em voo</option>
               <option value="retornando">Retornando</option>
               <option value="carregando">Carregando</option>
-              <option value="manutencao">Manutencao</option>
-              <option value="emergencia">Emergencia</option>
+              <option value="manutencao">Manutenção</option>
+              <option value="emergencia">Emergência</option>
             </select>
             {renderSelectChevron()}
           </div>
@@ -258,12 +258,12 @@ export function ListaDrones(): ReactElement {
                     <th className={HEAD_CELL_CLASS_NAME}>ID</th>
                     <th className={HEAD_CELL_CLASS_NAME}>Modelo</th>
                     <th className={HEAD_CELL_CLASS_NAME}>Autonomia</th>
-                    <th className={HEAD_CELL_CLASS_NAME}>Carga max.</th>
+                    <th className={HEAD_CELL_CLASS_NAME}>Carga máx.</th>
                     <th className={HEAD_CELL_CLASS_NAME}>Velocidade</th>
                     <th className={HEAD_CELL_CLASS_NAME}>Bateria</th>
                     <th className={HEAD_CELL_CLASS_NAME}>Status</th>
                     <th className={cn(HEAD_CELL_CLASS_NAME, "text-right")}>
-                      Acoes
+                      Ações
                     </th>
                   </tr>
                 </thead>
@@ -276,7 +276,7 @@ export function ListaDrones(): ReactElement {
 
               <div className={PAGINATION_CLASS_NAME}>
                 <p className="text-sm text-[var(--text-muted)]">
-                  Pagina {currentPage} de {totalPages}
+                  Página {currentPage} de {totalPages}
                 </p>
 
                 <div className="flex items-center gap-2">
@@ -298,7 +298,7 @@ export function ListaDrones(): ReactElement {
                     }}
                     disabled={currentPage === totalPages}
                   >
-                    Proxima
+                    Próxima
                   </Button>
                 </div>
               </div>

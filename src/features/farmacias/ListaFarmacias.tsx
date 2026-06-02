@@ -79,13 +79,13 @@ const DIALOG_CONTENT_CLASS_NAME =
 const DIALOG_FOOTER_CLASS_NAME =
   "border-[var(--surface-border)] bg-[var(--surface-panel)]";
 const DEPOSIT_WARNING_MESSAGE =
-  "A farmacia-polo nao pode ser desativada. Reative outra unidade para assumir o deposito, se necessario.";
+  "A farmácia-polo não pode ser desativada. Reative outra unidade para assumir o depósito, se necessário.";
 const SEARCH_PLACEHOLDER = "Buscar por nome ou cidade";
-const EMPTY_STATE_MESSAGE = "Nenhuma farmacia cadastrada";
-const LOAD_ERROR_MESSAGE = "Nao foi possivel carregar as farmacias.";
-const DEACTIVATE_SUCCESS_MESSAGE = "Farmacia desativada com sucesso.";
-const REACTIVATE_SUCCESS_MESSAGE = "Farmacia reativada com sucesso.";
-const UPDATE_ERROR_MESSAGE = "Nao foi possivel atualizar a farmacia.";
+const EMPTY_STATE_MESSAGE = "Nenhuma farmácia cadastrada";
+const LOAD_ERROR_MESSAGE = "Não foi possível carregar as farmácias.";
+const DEACTIVATE_SUCCESS_MESSAGE = "Farmácia desativada com sucesso.";
+const REACTIVATE_SUCCESS_MESSAGE = "Farmácia reativada com sucesso.";
+const UPDATE_ERROR_MESSAGE = "Não foi possível atualizar a farmácia.";
 
 type StatusFilterValue = "todas" | "ativas" | "inativas";
 
@@ -168,9 +168,9 @@ function FarmaciaRowComponent({
 
               <DialogContent className={DIALOG_CONTENT_CLASS_NAME}>
                 <DialogHeader>
-                  <DialogTitle>Desativar farmacia</DialogTitle>
+                  <DialogTitle>Desativar farmácia</DialogTitle>
                   <DialogDescription>
-                    Confirma a desativacao da farmacia {farmacia.nome}?
+                    Confirma a desativação da farmácia {farmacia.nome}?
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter className={DIALOG_FOOTER_CLASS_NAME}>
@@ -328,7 +328,7 @@ export function ListaFarmacias(): ReactElement {
         <div className={CONTENT_CLASS_NAME}>
           <div className="rounded-[var(--radius-lg)] border border-[var(--status-danger)] bg-[var(--surface-card)] p-6">
             <h1 className="mb-2 text-lg font-semibold text-[var(--text-primary)]">
-              Falha ao carregar farmacias
+              Falha ao carregar farmácias
             </h1>
             <p className="text-sm text-[var(--text-secondary)]">
               {getErrorMessage(farmaciasQuery.error) || LOAD_ERROR_MESSAGE}
@@ -344,11 +344,11 @@ export function ListaFarmacias(): ReactElement {
       <div className={TOPBAR_CLASS_NAME}>
         <div className={TOPBAR_CONTENT_CLASS_NAME}>
           <nav aria-label="Breadcrumb" className={BREADCRUMB_CLASS_NAME}>
-            <span className={BREADCRUMB_CURRENT_CLASS_NAME}>Farmacias</span>
+            <span className={BREADCRUMB_CURRENT_CLASS_NAME}>Farmácias</span>
           </nav>
 
           <Button asChild>
-            <Link to={CREATE_ROUTE_PATH}>Nova Farmacia</Link>
+            <Link to={CREATE_ROUTE_PATH}>Nova Farmácia</Link>
           </Button>
         </div>
       </div>
@@ -356,7 +356,7 @@ export function ListaFarmacias(): ReactElement {
       <div className={CONTENT_CLASS_NAME}>
         <header className={SECTION_HEADER_CLASS_NAME}>
           <div className="flex flex-col gap-1">
-            <h1 className={TITLE_CLASS_NAME}>Farmacias</h1>
+            <h1 className={TITLE_CLASS_NAME}>Farmácias</h1>
             <p className={DESCRIPTION_CLASS_NAME}>
               {filteredFarmacias.length} registro(s) encontrado(s)
             </p>
@@ -409,7 +409,7 @@ export function ListaFarmacias(): ReactElement {
                 {EMPTY_STATE_MESSAGE}
               </p>
               <Button asChild>
-                <Link to={CREATE_ROUTE_PATH}>Nova Farmacia</Link>
+                <Link to={CREATE_ROUTE_PATH}>Nova Farmácia</Link>
               </Button>
             </div>
           ) : (
@@ -424,7 +424,7 @@ export function ListaFarmacias(): ReactElement {
                     <th className={HEAD_CELL_CLASS_NAME}>Telefone</th>
                     <th className={HEAD_CELL_CLASS_NAME}>Status</th>
                     <th className={cn(HEAD_CELL_CLASS_NAME, "text-right")}>
-                      Operacao
+                      Operação
                     </th>
                   </tr>
                 </thead>
@@ -442,7 +442,7 @@ export function ListaFarmacias(): ReactElement {
 
               <div className={PAGINATION_CLASS_NAME}>
                 <p className="text-sm text-[var(--text-muted)]">
-                  Pagina {currentPage} de {totalPages}
+                  Página {currentPage} de {totalPages}
                 </p>
                 <div className="flex items-center gap-2">
                   <Button
@@ -463,7 +463,7 @@ export function ListaFarmacias(): ReactElement {
                     }}
                     disabled={currentPage === totalPages}
                   >
-                    Proxima
+                    Próxima
                   </Button>
                 </div>
               </div>

@@ -74,12 +74,12 @@ const DIALOG_CONTENT_CLASS_NAME =
   "border border-[var(--surface-border)] bg-[var(--surface-card)] text-[var(--text-primary)]";
 const DIALOG_FOOTER_CLASS_NAME =
   "border-[var(--surface-border)] bg-[var(--surface-panel)]";
-const SEARCH_PLACEHOLDER = "Buscar por ID ou descricao";
+const SEARCH_PLACEHOLDER = "Buscar por ID ou descrição";
 const EMPTY_STATE_MESSAGE = "Nenhum pedido cadastrado";
-const LOAD_ERROR_MESSAGE = "Nao foi possivel carregar os pedidos.";
+const LOAD_ERROR_MESSAGE = "Não foi possível carregar os pedidos.";
 const CANCEL_SUCCESS_MESSAGE = "Pedido cancelado com sucesso.";
-const CANCEL_ERROR_MESSAGE = "Nao foi possivel cancelar o pedido.";
-const ROTAS_PENDING_MESSAGE = "A tela de roteirizacao sera conectada na proxima etapa.";
+const CANCEL_ERROR_MESSAGE = "Não foi possível cancelar o pedido.";
+const ROTAS_PENDING_MESSAGE = "A tela de roteirização será conectada na próxima etapa.";
 const WEIGHT_DECIMAL_PLACES = 2;
 
 type StatusFilterValue = "todos" | PedidoStatus;
@@ -552,7 +552,7 @@ export function ListaPedidos(): ReactElement {
               onChange={handleFarmaciaChange}
               className={FILTER_SELECT_CLASS_NAME}
             >
-              <option value="todas">Todas as farmacias</option>
+              <option value="todas">Todas as farmácias</option>
               {farmaciasFilterOptions.map((farmacia) => (
                 <option key={farmacia.value} value={farmacia.value}>
                   {farmacia.label}
@@ -580,13 +580,13 @@ export function ListaPedidos(): ReactElement {
                   <tr>
                     <th className={HEAD_CELL_CLASS_NAME}>ID</th>
                     <th className={HEAD_CELL_CLASS_NAME}>Prioridade</th>
-                    <th className={HEAD_CELL_CLASS_NAME}>Farmacia</th>
+                    <th className={HEAD_CELL_CLASS_NAME}>Farmácia</th>
                     <th className={HEAD_CELL_CLASS_NAME}>Peso</th>
                     <th className={HEAD_CELL_CLASS_NAME}>Status</th>
                     <th className={HEAD_CELL_CLASS_NAME}>Janela</th>
                     <th className={HEAD_CELL_CLASS_NAME}>Criado em</th>
                     <th className={cn(HEAD_CELL_CLASS_NAME, "text-right")}>
-                      Acoes
+                      Ações
                     </th>
                   </tr>
                 </thead>
@@ -604,7 +604,7 @@ export function ListaPedidos(): ReactElement {
 
               <div className={PAGINATION_CLASS_NAME}>
                 <p className="text-sm text-[var(--text-muted)]">
-                  Pagina {currentPage} de {totalPages}
+                  Página {currentPage} de {totalPages}
                 </p>
 
                 <div className="flex items-center gap-2">
@@ -626,7 +626,7 @@ export function ListaPedidos(): ReactElement {
                     }}
                     disabled={currentPage === totalPages}
                   >
-                    Proxima
+                    Próxima
                   </Button>
                 </div>
               </div>

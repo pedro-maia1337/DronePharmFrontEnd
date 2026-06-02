@@ -13,7 +13,7 @@ export default function PedidoCreatePage(): ReactElement {
           Novo Pedido
         </h1>
         <p className="text-sm text-muted-foreground">
-          A rota de cadastro foi conectada e esta pronta para receber o formulario.
+          A rota de cadastro foi conectada e está pronta para receber o formulário.
         </p>
       </div>
     </section>

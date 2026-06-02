@@ -103,7 +103,7 @@ function renderPedidoPreviewCard(pedido: PedidoResponse): ReactElement {
             Pedido #{pedido.id}
           </h2>
           <p className="text-xs text-[var(--text-secondary)]">
-            Farmacia #{pedido.farmacia_id}
+            Farmácia #{pedido.farmacia_id}
           </p>
         </div>
         <span
@@ -171,7 +171,7 @@ export function MonitoringSelector(): ReactElement {
               htmlFor="monitoring-pedido-select"
               className="text-sm font-medium text-[var(--text-secondary)]"
             >
-              Pedido disponivel
+              Pedido disponível
             </label>
 
             <div className={SELECT_WRAPPER_CLASS_NAME}>
@@ -197,7 +197,7 @@ export function MonitoringSelector(): ReactElement {
 
             {selectablePedidos.length === 0 ? (
               <div className={EMPTY_STATE_CLASS_NAME}>
-                Nenhum pedido pendente ou calculado esta disponivel no momento.
+                Nenhum pedido pendente ou calculado está disponível no momento.
               </div>
             ) : (
               <div className={GRID_CLASS_NAME}>
