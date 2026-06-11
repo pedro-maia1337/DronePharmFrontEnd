@@ -2,13 +2,12 @@ import type { ReactElement } from "react";
 
 import { AlertTriangle } from "lucide-react";
 
-import { formatEta } from "@/lib/utils";
 import type { PosicaoAtualResponse, WSTelemetriaPayload } from "@/types/api";
 
 import type { DroneMonitoramento } from "../monitoringUtils";
 
 const BATTERY_ALERT_THRESHOLD = 0.2;
-const KMH_FACTOR = 3.6;
+const NUMBER_LOCALE = "pt-BR";
 const EMPTY_VALUE = "--";
 const GRID_CLASS_NAME = "grid grid-cols-2 gap-[7px]";
 const CARD_CLASS_NAME =
@@ -43,12 +42,24 @@ interface MetricCard {
   variant?: "default" | "alert" | "accent";
 }
 
-function formatNumber(value: number, fractionDigits = 0): string {
-  return value.toFixed(fractionDigits);
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat(NUMBER_LOCALE, {
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatRoundedNumber(value: number): string {
+  return new Intl.NumberFormat(NUMBER_LOCALE, {
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 function formatPercent(value: number): string {
-  return formatNumber(value * 100);
+  return formatRoundedNumber(value * 100);
+}
+
+function formatDegrees(value: number): string {
+  return formatRoundedNumber(value);
 }
 
 function getSignalValue(
@@ -75,7 +86,14 @@ function getAltitudeValue(
   currentFrame: WSTelemetriaPayload | null,
   positionSnapshot: PosicaoAtualResponse | null,
 ): string {
-  const altitude = currentFrame?.altitude_m ?? positionSnapshot?.altitude_m;
+  const rawAltitude = currentFrame?.rawTelemetry.altitude;
+  const rawAltitudeMeters = currentFrame?.rawTelemetry.altitude_m;
+  const altitude =
+    typeof rawAltitude === "number" && Number.isFinite(rawAltitude)
+      ? rawAltitude
+      : typeof rawAltitudeMeters === "number" && Number.isFinite(rawAltitudeMeters)
+        ? rawAltitudeMeters
+        : positionSnapshot?.altitude_m;
 
   if (altitude === null || altitude === undefined) {
     return EMPTY_VALUE;
@@ -89,11 +107,17 @@ function getVelocityValue(currentFrame: WSTelemetriaPayload | null): string {
     return EMPTY_VALUE;
   }
 
-  return formatNumber(currentFrame.velocidade_ms * KMH_FACTOR, 0);
+  const velocidade = currentFrame.rawTelemetry.velocidade_m_s;
+
+  if (typeof velocidade !== "number" || !Number.isFinite(velocidade)) {
+    return EMPTY_VALUE;
+  }
+
+  return formatNumber(velocidade);
 }
 
 function getBatteryValue(currentFrame: WSTelemetriaPayload | null): string {
-  if (currentFrame === null) {
+  if (currentFrame === null || !Number.isFinite(currentFrame.bateria_pct)) {
     return EMPTY_VALUE;
   }
 
@@ -105,7 +129,7 @@ function getDirectionValue(monitoramento: DroneMonitoramento | null): string {
     return EMPTY_VALUE;
   }
 
-  return formatNumber(monitoramento.vetor.direcao, 0);
+  return formatDegrees(monitoramento.vetor.direcao);
 }
 
 function getEtaValue(etaSegundos: number | null): string {
@@ -113,7 +137,7 @@ function getEtaValue(etaSegundos: number | null): string {
     return EMPTY_VALUE;
   }
 
-  return formatEta(etaSegundos);
+  return `${formatNumber(etaSegundos)} s`;
 }
 
 function getProgressValue(progressPct: number | null): string {
@@ -180,7 +204,7 @@ function buildMetricCards(
       key: "velocidade",
       label: "Velocidade",
       value: getVelocityValue(currentFrame),
-      unit: "km/h",
+      unit: "m/s",
     },
     {
       key: "altura",
@@ -194,7 +218,9 @@ function buildMetricCards(
       value: getBatteryValue(currentFrame),
       unit: "%",
       variant:
-        currentFrame !== null && currentFrame.bateria_pct < BATTERY_ALERT_THRESHOLD
+        currentFrame !== null &&
+        Number.isFinite(currentFrame.bateria_pct) &&
+        currentFrame.bateria_pct < BATTERY_ALERT_THRESHOLD
           ? "alert"
           : "default",
     },

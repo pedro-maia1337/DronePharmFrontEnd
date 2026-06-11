@@ -2,8 +2,8 @@ import {
   memo,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
-  useState,
   type ReactElement,
 } from "react";
 
@@ -42,7 +42,9 @@ const DESTINATION_RADIUS_METERS = 18;
 const FIT_BOUNDS_PADDING: [number, number] = [32, 32];
 const DRONE_OPACITY_LOST = 0.5;
 const DRONE_OPACITY_DEFAULT = 1;
-const DRONE_ANIMATION_DURATION_MS = 220;
+const DEFAULT_PACKET_INTERVAL_MS = 2_000;
+const INSTANT_ANIMATION_DURATION_MS = 0;
+const NUMBER_LOCALE = "pt-BR";
 const MAP_WRAPPER_CLASS_NAME =
   "relative h-full min-h-[420px] w-full overflow-hidden bg-[var(--map-base)]";
 const MAP_CLASS_NAME = "h-full w-full";
@@ -77,6 +79,8 @@ interface StaticRouteLayerProps {
 interface DroneMarkerLayerProps {
   dronePosition: [number, number] | null;
   droneDirection: number | null;
+  packetTimestamp: string | null;
+  simulationStatus: string | null;
   signalLost: boolean;
 }
 
@@ -187,6 +191,14 @@ function getDronePosition(
   return getFallbackPosition(positionSnapshot) ?? snapshotDronePosition;
 }
 
+function getPacketTimestamp(currentFrame: WSTelemetriaPayload | null): string | null {
+  return currentFrame?.timestamp_servidor ?? currentFrame?.criado_em ?? null;
+}
+
+function getSimulationStatus(currentFrame: WSTelemetriaPayload | null): string | null {
+  return currentFrame?.status_simulacao ?? currentFrame?.status ?? null;
+}
+
 function getMapCenter(
   routePoints: [number, number][],
   destination: [number, number] | null,
@@ -217,26 +229,38 @@ function getMapLabel(
   positionSnapshot: PosicaoAtualResponse | null,
   snapshotDronePosition: [number, number] | null,
 ): string {
-  const latitude = currentFrame?.latitude ?? positionSnapshot?.latitude ?? null;
+  const latitude =
+    typeof currentFrame?.rawTelemetry.latitude === "number"
+      ? currentFrame.rawTelemetry.latitude
+      : positionSnapshot?.latitude ?? null;
   const longitude =
-    currentFrame?.longitude ?? positionSnapshot?.longitude ?? null;
+    typeof currentFrame?.rawTelemetry.longitude === "number"
+      ? currentFrame.rawTelemetry.longitude
+      : positionSnapshot?.longitude ?? null;
   const altitude =
-    currentFrame?.altitude_m ?? positionSnapshot?.altitude_m ?? null;
+    typeof currentFrame?.rawTelemetry.altitude === "number"
+      ? currentFrame.rawTelemetry.altitude
+      : typeof currentFrame?.rawTelemetry.altitude_m === "number"
+        ? currentFrame.rawTelemetry.altitude_m
+        : positionSnapshot?.altitude_m ?? null;
+  const numberFormatter = new Intl.NumberFormat(NUMBER_LOCALE, {
+    maximumFractionDigits: 20,
+  });
 
   if (
     (latitude === null || longitude === null) &&
     snapshotDronePosition !== null
   ) {
-    return `${snapshotDronePosition[0].toFixed(4)}, ${snapshotDronePosition[1].toFixed(4)} - snapshot inicial`;
+    return `${numberFormatter.format(snapshotDronePosition[0])}, ${numberFormatter.format(snapshotDronePosition[1])} - snapshot inicial`;
   }
 
   if (latitude === null || longitude === null) {
     return "Aguardando posição do drone";
   }
 
-  const altitudeLabel = altitude === null ? "--" : altitude.toFixed(0);
+  const altitudeLabel = altitude === null ? "--" : numberFormatter.format(altitude);
 
-  return `${latitude.toFixed(4)}, ${longitude.toFixed(4)} - alt ${altitudeLabel}m`;
+  return `${numberFormatter.format(latitude)}, ${numberFormatter.format(longitude)} - alt ${altitudeLabel}m`;
 }
 
 function FitBoundsController({
@@ -350,10 +374,15 @@ const StaticRouteLayer = memo(function StaticRouteLayer({
 const DroneMarkerLayer = memo(function DroneMarkerLayer({
   dronePosition,
   droneDirection,
+  packetTimestamp,
+  simulationStatus,
   signalLost,
 }: DroneMarkerLayerProps): ReactElement | null {
   const animationFrameRef = useRef<number | null>(null);
-  const [animatedPosition, setAnimatedPosition] = useState<[number, number] | null>(
+  const animatedPositionRef = useRef<[number, number] | null>(dronePosition);
+  const previousPacketTimestampRef = useRef<string | null>(packetTimestamp);
+  const [animatedPosition, setAnimatedPosition] = useReducer(
+    (_current: [number, number] | null, next: [number, number] | null) => next,
     dronePosition,
   );
   const droneIcon = useMemo(
@@ -363,27 +392,61 @@ const DroneMarkerLayer = memo(function DroneMarkerLayer({
 
   useEffect(() => {
     if (dronePosition === null) {
+      animatedPositionRef.current = null;
       setAnimatedPosition(null);
       return;
     }
 
-    const startPosition = animatedPosition ?? dronePosition;
-    const [startLat, startLng] = startPosition;
-    const [targetLat, targetLng] = dronePosition;
-    const startedAt = window.performance.now();
+    const status = simulationStatus?.toLowerCase() ?? "";
+    const shouldHoldPosition = status === "pausado" || status === "erro";
+    const shouldFixExactPosition = status === "concluido";
 
     if (animationFrameRef.current !== null) {
       window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
+
+    if (shouldHoldPosition) {
+      return;
+    }
+
+    if (shouldFixExactPosition) {
+      animatedPositionRef.current = dronePosition;
+      setAnimatedPosition(dronePosition);
+      return;
+    }
+
+    const startPosition = animatedPositionRef.current ?? dronePosition;
+    const [startLat, startLng] = startPosition;
+    const [targetLat, targetLng] = dronePosition;
+    const previousPacketTimestamp = previousPacketTimestampRef.current;
+    const parsedPreviousTimestamp =
+      previousPacketTimestamp === null ? Number.NaN : Date.parse(previousPacketTimestamp);
+    const parsedPacketTimestamp =
+      packetTimestamp === null ? Number.NaN : Date.parse(packetTimestamp);
+    const packetIntervalMs =
+      Number.isNaN(parsedPreviousTimestamp) || Number.isNaN(parsedPacketTimestamp)
+        ? DEFAULT_PACKET_INTERVAL_MS
+        : Math.max(parsedPacketTimestamp - parsedPreviousTimestamp, INSTANT_ANIMATION_DURATION_MS);
+    const animationDurationMs =
+      previousPacketTimestamp === null ? INSTANT_ANIMATION_DURATION_MS : packetIntervalMs;
+    const startedAt = window.performance.now();
+
+    previousPacketTimestampRef.current = packetTimestamp;
 
     const animate = (timestamp: number): void => {
       const elapsed = timestamp - startedAt;
-      const progress = Math.min(elapsed / DRONE_ANIMATION_DURATION_MS, 1);
-
-      setAnimatedPosition([
+      const progress =
+        animationDurationMs === INSTANT_ANIMATION_DURATION_MS
+          ? 1
+          : Math.min(elapsed / animationDurationMs, 1);
+      const nextPosition: [number, number] = [
         lerp(startLat, targetLat, progress),
         lerp(startLng, targetLng, progress),
-      ]);
+      ];
+
+      animatedPositionRef.current = nextPosition;
+      setAnimatedPosition(nextPosition);
 
       if (progress < 1) {
         animationFrameRef.current = window.requestAnimationFrame(animate);
@@ -397,7 +460,7 @@ const DroneMarkerLayer = memo(function DroneMarkerLayer({
         window.cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [animatedPosition, dronePosition]);
+  }, [dronePosition, packetTimestamp, simulationStatus]);
 
   if (animatedPosition === null) {
     return null;
@@ -429,6 +492,8 @@ export function MapCanvas({
     positionSnapshot,
     snapshotDronePosition,
   );
+  const packetTimestamp = getPacketTimestamp(currentFrame);
+  const simulationStatus = getSimulationStatus(currentFrame);
   const mapCenter = getMapCenter(routePoints, destination, dronePosition, depot);
   const overlayPoints = useMemo(() => {
     const points = [...routePoints];
@@ -473,6 +538,8 @@ export function MapCanvas({
         <DroneMarkerLayer
           dronePosition={dronePosition}
           droneDirection={droneDirection}
+          packetTimestamp={packetTimestamp}
+          simulationStatus={simulationStatus}
           signalLost={signalLost}
         />
       </MapContainer>

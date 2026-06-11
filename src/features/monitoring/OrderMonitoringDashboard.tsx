@@ -20,11 +20,16 @@ import { cancelarPedido, entregarPedido, getPedido, getPedidoAtivo } from "@/api
 import { abortarRota, calcularRotas, despacharRota, getRota, simularRotaAgora } from "@/api/rotas";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatEta } from "@/lib/utils";
-import type { HTTPValidationError, PedidoStatus } from "@/types/api";
+import type {
+  HTTPValidationError,
+  PedidoStatus,
+  SimulacaoStatusResponse,
+  SimulacaoVisualStatus,
+} from "@/types/api";
 
 import { MapCanvas } from "./components/MapCanvas";
 import { ReplayTimeline } from "./components/ReplayTimeline";
+import { SimulationProgressPanel } from "./components/SimulationProgressPanel";
 import { StatusControl } from "./components/StatusControl";
 import { TelemetryGrid } from "./components/TelemetryGrid";
 import { usePedidoStream } from "./hooks/usePedidoStream";
@@ -33,9 +38,7 @@ import {
   buildDroneMonitoramento,
   buildMonitoringGeoJsonSnapshot,
   buildMonitoringSnapshot,
-  getEffectiveEtaSegundos,
   getMonitoringBadgeClassName,
-  getRouteProgress,
   isSignalLost,
   routePointsFromWaypoints,
 } from "./monitoringUtils";
@@ -86,6 +89,10 @@ type MonitoringUiAction =
   | { type: "set_status_override"; status: PedidoStatus | null }
   | { type: "show_completion_banner" }
   | { type: "hide_completion_banner" };
+
+type SimulationStatusAction =
+  | { type: "reset" }
+  | { type: "set_status"; status: SimulacaoStatusResponse };
 
 function isPedidoStatus(value: string | null | undefined): value is PedidoStatus {
   return (
@@ -227,55 +234,47 @@ function renderHeader(
   );
 }
 
-function renderProgressSection(
-  progressPct: number | null,
-  tempoDecorridoSegundos: number | null,
-  estimativaEntregaEm: string | null,
-): ReactElement {
-  const width = progressPct === null ? 0 : Math.min(Math.max(progressPct, 0), 100);
-  const formatter = new Intl.DateTimeFormat("pt-BR", {
-    timeStyle: "short",
-  });
-  const estimativaLabel =
-    estimativaEntregaEm === null
-      ? "--"
-      : formatter.format(new Date(estimativaEntregaEm));
-  const decorridoLabel =
-    tempoDecorridoSegundos === null ? "--" : formatEta(tempoDecorridoSegundos);
+function createSimulationStatus(
+  status: SimulacaoVisualStatus,
+  mensagem: string,
+  progressoPercentual: number | null,
+): SimulacaoStatusResponse {
+  return {
+    status_simulacao: status,
+    timestamp_servidor: "",
+    drone_id: "",
+    latitude: null,
+    longitude: null,
+    altitude: null,
+    velocidade_m_s: null,
+    distancia_percorrida_m: null,
+    distancia_restante_m: null,
+    progresso_percentual: progressoPercentual,
+    etapa_atual: 0,
+    total_etapas: 0,
+    tempo_decorrido: null,
+    eta_segundos: null,
+    velocidade_simulacao: null,
+    horario_estimado_chegada: "",
+    tempo_decorrido_segundos: null,
+    tempo_total_estimado_segundos: null,
+    tempo_restante_segundos: null,
+    mensagem,
+  };
+}
 
-  return (
-    <section className={SECTION_CLASS_NAME} aria-label="Progresso do trajeto">
-      <div className={SECTION_TITLE_CLASS_NAME}>Progresso do trajeto</div>
-      <div className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--surface-border)] bg-[var(--surface-card)] p-4 shadow-[var(--shadow-card)]">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-[var(--text-secondary)]">Conclusão</span>
-          <span className="font-mono text-sm tabular-nums text-[var(--text-primary)]">
-            {progressPct === null ? "--" : `${progressPct}%`}
-          </span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-border)]">
-          <div
-            className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-200"
-            style={{ width: `${width}%` }}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3 text-xs text-[var(--text-secondary)]">
-          <div>
-            <span className="block">Decorrido</span>
-            <span className="font-mono text-[var(--text-primary)]">
-              {decorridoLabel}
-            </span>
-          </div>
-          <div>
-            <span className="block">ETA previsto</span>
-            <span className="font-mono text-[var(--text-primary)]">
-              {estimativaLabel}
-            </span>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
+function simulationStatusReducer(
+  state: SimulacaoStatusResponse | null,
+  action: SimulationStatusAction,
+): SimulacaoStatusResponse | null {
+  switch (action.type) {
+    case "reset":
+      return null;
+    case "set_status":
+      return action.status;
+    default:
+      return state;
+  }
 }
 
 function renderRoutePedidosSection(
@@ -323,6 +322,10 @@ export function OrderMonitoringDashboard({
   const [isStartingFlight, setIsStartingFlight] = useState(false);
   const [isSimulatingNow, setIsSimulatingNow] = useState(false);
   const [isAbortingFlight, setIsAbortingFlight] = useState(false);
+  const [simulationStatus, dispatchSimulationStatus] = useReducer(
+    simulationStatusReducer,
+    null,
+  );
   const [heartbeatNow, setHeartbeatNow] = useState(() => Date.now());
   const [monitoringUiState, dispatchMonitoringUi] = useReducer(
     monitoringUiReducer,
@@ -545,45 +548,8 @@ export function OrderMonitoringDashboard({
   const monitoramento = useMemo(() => {
     return buildDroneMonitoramento(effectiveSnapshot, currentFrame);
   }, [currentFrame, effectiveSnapshot]);
-  const currentPosition = useMemo(() => {
-    if (currentFrame !== null) {
-      return [currentFrame.latitude, currentFrame.longitude] as [number, number];
-    }
-
-    if (
-      effectiveSnapshot?.positionSnapshot?.latitude !== null &&
-      effectiveSnapshot?.positionSnapshot?.latitude !== undefined &&
-      effectiveSnapshot.positionSnapshot.longitude !== null &&
-      effectiveSnapshot.positionSnapshot.longitude !== undefined
-    ) {
-      return [
-        effectiveSnapshot.positionSnapshot.latitude,
-        effectiveSnapshot.positionSnapshot.longitude,
-      ] as [number, number];
-    }
-
-    if (geoJsonSnapshot.dronePosition !== null) {
-      return geoJsonSnapshot.dronePosition;
-    }
-
-    return null;
-  }, [currentFrame, effectiveSnapshot, geoJsonSnapshot.dronePosition]);
-  const effectiveEtaSegundos = useMemo(() => {
-    return getEffectiveEtaSegundos(
-      currentFrame?.eta_segundos ?? effectiveSnapshot?.etaSegundos ?? null,
-      routePoints,
-      currentPosition,
-      effectiveSnapshot?.destination ?? null,
-      currentFrame?.velocidade_ms ?? null,
-    );
-  }, [
-    currentFrame?.eta_segundos,
-    currentFrame?.velocidade_ms,
-    currentPosition,
-    effectiveSnapshot?.destination,
-    effectiveSnapshot?.etaSegundos,
-    routePoints,
-  ]);
+  const effectiveEtaSegundos =
+    currentFrame?.eta_segundos ?? simulationStatus?.eta_segundos ?? effectiveSnapshot?.etaSegundos ?? null;
   const signalLost = useMemo(() => {
     return isSignalLost(
       currentFrame,
@@ -594,13 +560,32 @@ export function OrderMonitoringDashboard({
   const effectiveDestination = useMemo(() => {
     return effectiveSnapshot?.destination ?? geoJsonSnapshot.destination;
   }, [effectiveSnapshot?.destination, geoJsonSnapshot.destination]);
-  const progressPct = useMemo(() => {
-    if (effectiveSnapshot === null) {
-      return null;
-    }
-
-    return getRouteProgress(routePoints, currentPosition);
-  }, [currentPosition, effectiveSnapshot, routePoints]);
+  const progressPct =
+    currentFrame?.progresso_percentual ?? simulationStatus?.progresso_percentual ?? null;
+  const tempoDecorridoSegundos =
+    currentFrame?.tempo_decorrido_segundos ??
+    simulationStatus?.tempo_decorrido_segundos ??
+    simulationStatus?.tempo_decorrido ??
+    effectiveSnapshot?.tempoDecorridoSegundos ??
+    null;
+  const tempoRestanteSegundos =
+    currentFrame?.tempo_restante_segundos ??
+    simulationStatus?.tempo_restante_segundos ??
+    null;
+  const tempoTotalEstimadoSegundos =
+    currentFrame?.tempo_total_estimado_segundos ??
+    simulationStatus?.tempo_total_estimado_segundos ??
+    null;
+  const horarioEstimadoChegada =
+    currentFrame?.horario_estimado_chegada ??
+    simulationStatus?.horario_estimado_chegada ??
+    null;
+  const simulationRunning =
+    simulationStatus?.status_simulacao === "executando" ||
+    isSimulatingNow ||
+    effectiveSnapshot?.status === "despachado" ||
+    effectiveSnapshot?.status === "em_voo";
+  const simulationConnectionMessage = orderStream.error ?? pedidoStream.error;
   const droneOptions = useMemo(() => {
     return (dronesQuery.data?.drones ?? []).map((drone) => ({
       value: drone.id,
@@ -656,6 +641,7 @@ export function OrderMonitoringDashboard({
 
   useEffect(() => {
     resetTelemetry();
+    dispatchSimulationStatus({ type: "reset" });
     dispatchMonitoringUi({ type: "reset" });
   }, [pedidoId, resetTelemetry]);
 
@@ -702,6 +688,34 @@ export function OrderMonitoringDashboard({
   }, [currentFrame?.status_missao]);
 
   useEffect(() => {
+    if (effectiveSnapshot?.status === "entregue") {
+      dispatchSimulationStatus({
+        type: "set_status",
+        status: createSimulationStatus(
+          "concluido",
+          "Simulacao concluida com sucesso.",
+          null,
+        ),
+      });
+      return;
+    }
+
+    if (
+      effectiveSnapshot?.status === "falha" ||
+      effectiveSnapshot?.status === "cancelado"
+    ) {
+      dispatchSimulationStatus({
+        type: "set_status",
+        status: createSimulationStatus(
+          "erro",
+          "Simulacao encerrada antes da conclusao.",
+          progressPct,
+        ),
+      });
+    }
+  }, [effectiveSnapshot?.status, progressPct]);
+
+  useEffect(() => {
     const lastEvent = pedidoStream.lastEvent;
     if (lastEvent === null) {
       return;
@@ -734,6 +748,14 @@ export function OrderMonitoringDashboard({
 
     if (lastEvent.evento === "pedido_entregue" || nextStatus === "entregue") {
       dispatchMonitoringUi({ type: "show_completion_banner" });
+      dispatchSimulationStatus({
+        type: "set_status",
+        status: createSimulationStatus(
+          "concluido",
+          "Simulacao concluida com sucesso.",
+          null,
+        ),
+      });
       toast.success("Missão concluída com sucesso.");
       window.setTimeout(() => {
         dispatchMonitoringUi({ type: "hide_completion_banner" });
@@ -742,6 +764,16 @@ export function OrderMonitoringDashboard({
     }
 
     if (nextStatus === "cancelado" || nextStatus === "falha" || nextStatus === "pendente") {
+      dispatchSimulationStatus({
+        type: "set_status",
+        status: createSimulationStatus(
+          nextStatus === "pendente" ? "aguardando" : "erro",
+          nextStatus === "pendente"
+            ? "Simulacao pronta para novo acionamento."
+            : "Simulacao encerrada antes da conclusao.",
+          null,
+        ),
+      });
       void refreshQueries({ includePedidoAtivo: false });
     }
   }, [
@@ -882,12 +914,39 @@ export function OrderMonitoringDashboard({
 
     try {
       setIsSimulatingNow(true);
-      await simularRotaAgora(rotaId);
+      dispatchSimulationStatus({
+        type: "set_status",
+        status: createSimulationStatus(
+          "executando",
+          "Solicitando inicio imediato da simulacao.",
+          progressPct,
+        ),
+      });
+      const response = await simularRotaAgora(rotaId);
+      dispatchSimulationStatus({
+        type: "set_status",
+        status:
+          response ??
+          createSimulationStatus(
+            "executando",
+            "Simulacao iniciada. Aguardando eventos do backend.",
+            progressPct,
+          ),
+      });
       dispatchMonitoringUi({ type: "set_status_override", status: "em_voo" });
       await refreshQueries();
       toast.success("Simulação iniciada imediatamente.");
     } catch (error) {
-      toast.error(getErrorMessage(error));
+      const message = getErrorMessage(error);
+      dispatchSimulationStatus({
+        type: "set_status",
+        status: createSimulationStatus(
+          "erro",
+          message,
+          progressPct,
+        ),
+      });
+      toast.error(message);
     } finally {
       setIsSimulatingNow(false);
     }
@@ -981,11 +1040,21 @@ export function OrderMonitoringDashboard({
           currentFrame={deferredFrame}
           historyLength={historyLength}
         />
-        {renderProgressSection(
-          progressPct,
-          effectiveSnapshot.tempoDecorridoSegundos,
-          effectiveSnapshot.estimativaEntregaEm,
-        )}
+        <SimulationProgressPanel
+          pedidoStatus={effectiveSnapshot.status}
+          simulationStatus={simulationStatus}
+          currentFrame={currentFrame}
+          progressPct={progressPct}
+          tempoDecorridoSegundos={tempoDecorridoSegundos}
+          etaSegundos={effectiveEtaSegundos}
+          tempoRestanteSegundos={tempoRestanteSegundos}
+          tempoTotalEstimadoSegundos={tempoTotalEstimadoSegundos}
+          horarioEstimadoChegada={horarioEstimadoChegada}
+          isSimulatingNow={isSimulatingNow}
+          streamConnected={orderStream.connected || pedidoStream.connected}
+          signalLost={signalLost}
+          connectionMessage={simulationConnectionMessage}
+        />
         <StatusControl
           status={effectiveSnapshot.status}
           pedidoId={effectiveSnapshot.pedidoId}
@@ -997,6 +1066,7 @@ export function OrderMonitoringDashboard({
           isCalculatingRoute={isCalculatingRoute}
           isStartingFlight={isStartingFlight}
           isSimulatingNow={isSimulatingNow}
+          isSimulationRunning={simulationRunning}
           isAbortingFlight={isAbortingFlight}
           canStartFlight={canStartFlight}
           canCalculateRoute={routeCalculationAvailable}

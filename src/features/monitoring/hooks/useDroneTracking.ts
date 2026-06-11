@@ -7,6 +7,8 @@ const BASE_RETRY_DELAY_MS = 1000;
 const MAX_RETRY_DELAY_MS = 30_000;
 const MAX_RECONNECT_ATTEMPTS = 8;
 const NORMAL_CLOSE_CODE = 1000;
+const DEFAULT_TELEMETRY_ID = 0;
+const LEGACY_NUMBER_FALLBACK = 0;
 
 interface DroneTrackingState {
   connected: boolean;
@@ -17,24 +19,83 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isWSTelemetriaPayload(value: unknown): value is WSTelemetriaPayload {
-  if (!isRecord(value)) {
-    return false;
+function getFiniteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function getString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function getRawTelemetry(payload: Record<string, unknown>): Record<string, unknown> {
+  return { ...payload };
+}
+
+function getTelemetryTimestamp(payload: Record<string, unknown>): string | null {
+  return getString(payload.timestamp_servidor) ?? getString(payload.criado_em);
+}
+
+function getTelemetryId(payload: Record<string, unknown>, timestamp: string): number {
+  const id = getFiniteNumber(payload.id);
+
+  if (id !== null) {
+    return id;
   }
 
-  return (
-    typeof value.id === "number" &&
-    typeof value.drone_id === "string" &&
-    typeof value.latitude === "number" &&
-    typeof value.longitude === "number" &&
-    typeof value.altitude_m === "number" &&
-    typeof value.velocidade_ms === "number" &&
-    typeof value.bateria_pct === "number" &&
-    typeof value.vento_ms === "number" &&
-    typeof value.direcao_vento === "number" &&
-    typeof value.status === "string" &&
-    typeof value.criado_em === "string"
-  );
+  const parsedTimestamp = Date.parse(timestamp);
+
+  return Number.isFinite(parsedTimestamp) ? parsedTimestamp : DEFAULT_TELEMETRY_ID;
+}
+
+function normalizeWSTelemetriaPayload(
+  value: unknown,
+): WSTelemetriaPayload | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const droneId = getString(value.drone_id);
+  const latitude = getFiniteNumber(value.latitude);
+  const longitude = getFiniteNumber(value.longitude);
+  const timestamp = getTelemetryTimestamp(value);
+
+  if (droneId === null || latitude === null || longitude === null || timestamp === null) {
+    return null;
+  }
+
+  const altitude = getFiniteNumber(value.altitude_m) ?? getFiniteNumber(value.altitude);
+  const velocidade =
+    getFiniteNumber(value.velocidade_ms) ?? getFiniteNumber(value.velocidade_m_s);
+  const status =
+    getString(value.status) ?? getString(value.status_simulacao) ?? "em_voo";
+
+  return {
+    rawTelemetry: getRawTelemetry(value),
+    id: getTelemetryId(value, timestamp),
+    drone_id: droneId,
+    latitude,
+    longitude,
+    altitude_m: altitude ?? LEGACY_NUMBER_FALLBACK,
+    velocidade_ms: velocidade ?? LEGACY_NUMBER_FALLBACK,
+    bateria_pct: getFiniteNumber(value.bateria_pct) ?? LEGACY_NUMBER_FALLBACK,
+    vento_ms: getFiniteNumber(value.vento_ms) ?? LEGACY_NUMBER_FALLBACK,
+    direcao_vento: getFiniteNumber(value.direcao_vento) ?? LEGACY_NUMBER_FALLBACK,
+    status,
+    criado_em: timestamp,
+    timestamp_servidor: getString(value.timestamp_servidor) ?? timestamp,
+    status_simulacao: getString(value.status_simulacao) ?? status,
+    velocidade_m_s: velocidade,
+    distancia_percorrida_m: getFiniteNumber(value.distancia_percorrida_m),
+    distancia_restante_m: getFiniteNumber(value.distancia_restante_m),
+    progresso_percentual: getFiniteNumber(value.progresso_percentual),
+    eta_segundos: getFiniteNumber(value.eta_segundos),
+    horario_estimado_chegada: getString(value.horario_estimado_chegada),
+    tempo_decorrido_segundos: getFiniteNumber(value.tempo_decorrido_segundos),
+    tempo_total_estimado_segundos: getFiniteNumber(
+      value.tempo_total_estimado_segundos,
+    ),
+    tempo_restante_segundos: getFiniteNumber(value.tempo_restante_segundos),
+  };
 }
 
 function clearReconnectTimer(timerId: number | null): void {
@@ -161,7 +222,9 @@ export function useDroneTracking(droneId: string): DroneTrackingState {
           try {
             const parsedPayload: unknown = JSON.parse(event.data);
 
-            if (!isWSTelemetriaPayload(parsedPayload)) {
+            const normalizedPayload = normalizeWSTelemetriaPayload(parsedPayload);
+
+            if (normalizedPayload === null) {
               console.warn("Payload de telemetria invalido recebido pelo WebSocket.", {
                 droneId,
                 payload: parsedPayload,
@@ -169,9 +232,9 @@ export function useDroneTracking(droneId: string): DroneTrackingState {
               return;
             }
 
-            setFrame(parsedPayload.drone_id, parsedPayload);
-            appendHistory(parsedPayload.drone_id, parsedPayload);
-            setStreamState(parsedPayload.drone_id, true, null);
+            setFrame(normalizedPayload.drone_id, normalizedPayload);
+            appendHistory(normalizedPayload.drone_id, normalizedPayload);
+            setStreamState(normalizedPayload.drone_id, true, null);
           } catch (caughtError) {
             const message =
               caughtError instanceof Error

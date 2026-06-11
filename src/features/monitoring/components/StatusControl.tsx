@@ -55,6 +55,7 @@ interface StatusControlProps {
   isCalculatingRoute?: boolean;
   isStartingFlight?: boolean;
   isSimulatingNow?: boolean;
+  isSimulationRunning?: boolean;
   isAbortingFlight?: boolean;
   canStartFlight?: boolean;
   canCalculateRoute?: boolean;
@@ -94,6 +95,7 @@ export function StatusControl({
   isCalculatingRoute = false,
   isStartingFlight = false,
   isSimulatingNow = false,
+  isSimulationRunning = false,
   isAbortingFlight = false,
   canStartFlight = false,
   canCalculateRoute = true,
@@ -200,11 +202,16 @@ export function StatusControl({
               </Button>
               <Button
                 type="button"
-                className={renderDisabledClass(!canStartFlight, PRIMARY_BUTTON_CLASS_NAME)}
-                disabled={!canStartFlight || isSimulatingNow}
+                className={renderDisabledClass(
+                  !canStartFlight || isSimulationRunning,
+                  PRIMARY_BUTTON_CLASS_NAME,
+                )}
+                disabled={!canStartFlight || isSimulatingNow || isSimulationRunning}
                 onClick={onSimularAgora}
               >
-                {isSimulatingNow ? "Simulando..." : "Simular Agora"}
+                {isSimulatingNow || isSimulationRunning
+                  ? "Simulando..."
+                  : "Simular Agora"}
               </Button>
             </>
           ) : null}

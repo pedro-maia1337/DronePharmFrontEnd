@@ -11,8 +11,6 @@ import type {
 } from "@/types/api";
 
 const PENDING_STATUSES: PedidoStatus[] = ["pendente", "calculado"];
-const EARTH_RADIUS_METERS = 6_371_000;
-const PERCENT_MULTIPLIER = 100;
 const MILLISECONDS_PER_SECOND = 1000;
 const HEARTBEAT_TIMEOUT_SECONDS = 10;
 
@@ -59,10 +57,6 @@ export interface MonitoringGeoJsonSnapshot {
   destination: [number, number] | null;
   dronePosition: [number, number] | null;
   routePoints: [number, number][];
-}
-
-function toRadians(value: number): number {
-  return (value * Math.PI) / 180;
 }
 
 function getPedidoResumo(
@@ -222,88 +216,6 @@ export function buildMonitoringGeoJsonSnapshot(
   };
 }
 
-function getHaversineDistance(
-  from: [number, number],
-  to: [number, number],
-): number {
-  const [fromLat, fromLng] = from;
-  const [toLat, toLng] = to;
-  const deltaLat = toRadians(toLat - fromLat);
-  const deltaLng = toRadians(toLng - fromLng);
-  const fromLatRad = toRadians(fromLat);
-  const toLatRad = toRadians(toLat);
-  const a =
-    Math.sin(deltaLat / 2) ** 2 +
-    Math.cos(fromLatRad) * Math.cos(toLatRad) * Math.sin(deltaLng / 2) ** 2;
-
-  return 2 * EARTH_RADIUS_METERS * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function getPolylineDistance(points: [number, number][]): number {
-  let distance = 0;
-
-  for (let index = 1; index < points.length; index += 1) {
-    distance += getHaversineDistance(points[index - 1], points[index]);
-  }
-
-  return distance;
-}
-
-function getRemainingRouteDistanceMeters(
-  routePoints: [number, number][],
-  currentPosition: [number, number],
-): number | null {
-  if (routePoints.length < 2) {
-    return null;
-  }
-
-  const totalDistance = getPolylineDistance(routePoints);
-
-  if (totalDistance <= 0) {
-    return null;
-  }
-
-  const traveledDistance = getClosestDistanceAlongRoute(
-    routePoints,
-    currentPosition,
-  );
-
-  return Math.max(totalDistance - traveledDistance, 0);
-}
-
-function getClosestDistanceAlongRoute(
-  routePoints: [number, number][],
-  currentPosition: [number, number],
-): number {
-  if (routePoints.length < 2) {
-    return 0;
-  }
-
-  let traveledDistance = 0;
-  let closestDistance = Number.POSITIVE_INFINITY;
-  let distanceAtClosestPoint = 0;
-
-  for (let index = 1; index < routePoints.length; index += 1) {
-    const segmentStart = routePoints[index - 1];
-    const segmentEnd = routePoints[index];
-    const distanceToStart = getHaversineDistance(currentPosition, segmentStart);
-    const distanceToEnd = getHaversineDistance(currentPosition, segmentEnd);
-    const segmentDistance = getHaversineDistance(segmentStart, segmentEnd);
-    const segmentClosestDistance = Math.min(distanceToStart, distanceToEnd);
-
-    if (segmentClosestDistance < closestDistance) {
-      closestDistance = segmentClosestDistance;
-      distanceAtClosestPoint =
-        traveledDistance +
-        (distanceToStart <= distanceToEnd ? 0 : segmentDistance);
-    }
-
-    traveledDistance += segmentDistance;
-  }
-
-  return distanceAtClosestPoint;
-}
-
 export function isPedidoSelectable(status: PedidoStatus): boolean {
   return PENDING_STATUSES.includes(status);
 }
@@ -363,61 +275,6 @@ export function buildMonitoringSnapshot(
     criadoEm: pedidoAtivo?.criado_em ?? pedido?.criado_em ?? null,
     droneId: pedidoAtivo?.drone?.id ?? pedidoAtivo?.drone_id ?? "",
   };
-}
-
-export function getRouteProgress(
-  routePoints: [number, number][],
-  currentPosition: [number, number] | null,
-): number | null {
-  if (routePoints.length < 2 || currentPosition === null) {
-    return null;
-  }
-
-  const totalDistance = getPolylineDistance(routePoints);
-
-  if (totalDistance <= 0) {
-    return null;
-  }
-
-  const traveledDistance = getClosestDistanceAlongRoute(
-    routePoints,
-    currentPosition,
-  );
-
-  return Math.round((traveledDistance / totalDistance) * PERCENT_MULTIPLIER);
-}
-
-export function getEffectiveEtaSegundos(
-  etaSegundos: number | null,
-  routePoints: [number, number][],
-  currentPosition: [number, number] | null,
-  destination: [number, number] | null,
-  velocidadeMs: number | null,
-): number | null {
-  if (etaSegundos !== null) {
-    return etaSegundos;
-  }
-
-  if (velocidadeMs === null || velocidadeMs <= 0 || currentPosition === null) {
-    return null;
-  }
-
-  const remainingRouteDistanceMeters = getRemainingRouteDistanceMeters(
-    routePoints,
-    currentPosition,
-  );
-
-  const distanceMeters =
-    remainingRouteDistanceMeters ??
-    (destination !== null
-      ? getHaversineDistance(currentPosition, destination)
-      : null);
-
-  if (distanceMeters === null) {
-    return null;
-  }
-
-  return Math.round(distanceMeters / velocidadeMs);
 }
 
 export function isSignalLost(

@@ -296,6 +296,37 @@ export interface RoteirizarResponse {
   calculado_em: string;
 }
 
+export type SimulacaoVisualStatus =
+  | "aguardando"
+  | "executando"
+  | "pausado"
+  | "concluido"
+  | "erro";
+
+export interface SimulacaoStatusResponse {
+  rawTelemetry?: RawTelemetryPayload;
+  status_simulacao: SimulacaoVisualStatus | string;
+  timestamp_servidor: string;
+  drone_id: string;
+  latitude: number | null;
+  longitude: number | null;
+  altitude: number | null;
+  velocidade_m_s: number | null;
+  distancia_percorrida_m: number | null;
+  distancia_restante_m: number | null;
+  progresso_percentual: number | null;
+  etapa_atual?: number | null;
+  total_etapas?: number | null;
+  tempo_decorrido: number | null;
+  eta_segundos: number | null;
+  velocidade_simulacao: number | null;
+  horario_estimado_chegada: string;
+  tempo_decorrido_segundos: number | null;
+  tempo_total_estimado_segundos: number | null;
+  tempo_restante_segundos: number | null;
+  mensagem: string;
+}
+
 export interface PedidoAtivoResponse {
   pedido_id: number;
   rota_id?: number | null;
@@ -329,10 +360,40 @@ export interface TelemetriaResponse {
   criado_em: string;
 }
 
+export type RawTelemetryPayload = Record<string, unknown>;
+
+export interface DisplayTelemetry {
+  statusSimulacao: string;
+  velocidadeAtual: string;
+  distanciaPercorrida: string;
+  distanciaRestante: string;
+  progresso: string;
+  eta: string;
+  tempoRestante: string;
+  tempoDecorrido: string;
+  tempoTotal: string;
+  horarioEstimadoChegada: string;
+  altitude: string;
+  latitude: string;
+  longitude: string;
+  velocidadeSimulacao: string;
+}
+
 export interface WSTelemetriaPayload extends TelemetriaResponse {
+  rawTelemetry: RawTelemetryPayload;
   pedido_id?: number | null;
   status_missao?: PedidoStatus | StatusDroneEnum | string | null;
   eta_segundos?: number | null;
+  timestamp_servidor?: string;
+  status_simulacao?: SimulacaoVisualStatus | string;
+  velocidade_m_s?: number | null;
+  distancia_percorrida_m?: number | null;
+  distancia_restante_m?: number | null;
+  progresso_percentual?: number | null;
+  horario_estimado_chegada?: string | null;
+  tempo_decorrido_segundos?: number | null;
+  tempo_total_estimado_segundos?: number | null;
+  tempo_restante_segundos?: number | null;
   direcao?: number | null;
   _ts?: string;
 }

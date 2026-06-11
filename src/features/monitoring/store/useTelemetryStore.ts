@@ -50,9 +50,37 @@ function isSameFrame(
   nextFrame: WSTelemetriaPayload,
 ): boolean {
   return (
-    currentFrame.id === nextFrame.id &&
-    currentFrame.criado_em === nextFrame.criado_em
+    currentFrame.criado_em === nextFrame.criado_em ||
+    currentFrame.timestamp_servidor === nextFrame.timestamp_servidor
   );
+}
+
+function getFrameTimestamp(frame: WSTelemetriaPayload): number {
+  const timestamp = Date.parse(frame.timestamp_servidor ?? frame.criado_em);
+
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function isOlderFrame(
+  currentFrame: WSTelemetriaPayload | undefined,
+  nextFrame: WSTelemetriaPayload,
+): boolean {
+  if (currentFrame === undefined) {
+    return false;
+  }
+
+  return getFrameTimestamp(nextFrame) < getFrameTimestamp(currentFrame);
+}
+
+function logTelemetryStorage(frame: WSTelemetriaPayload): void {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+
+  console.debug("DronePharm telemetry storage parity", {
+    receivedPayload: frame.rawTelemetry,
+    storedFrame: frame,
+  });
 }
 
 function getHistoryByDroneId(
@@ -102,12 +130,20 @@ export const useTelemetryStore = create<StoreState>((set, get) => ({
       return;
     }
 
-    set((state) => ({
-      framesByDroneId: {
-        ...state.framesByDroneId,
-        [droneId]: frame,
-      },
-    }));
+    set((state) => {
+      if (isOlderFrame(state.framesByDroneId[droneId], frame)) {
+        return state;
+      }
+
+      logTelemetryStorage(frame);
+
+      return {
+        framesByDroneId: {
+          ...state.framesByDroneId,
+          [droneId]: frame,
+        },
+      };
+    });
   },
   appendHistory: (droneId, frame) => {
     if (droneId.length === 0) {
@@ -119,6 +155,10 @@ export const useTelemetryStore = create<StoreState>((set, get) => ({
       const lastFrame = currentHistory[currentHistory.length - 1];
 
       if (lastFrame !== undefined && isSameFrame(lastFrame, frame)) {
+        return state;
+      }
+
+      if (isOlderFrame(lastFrame, frame)) {
         return state;
       }
 

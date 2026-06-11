@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { lerp } from "@/lib/utils";
-import type { TelemetriaResponse } from "@/types/api";
+import type { WSTelemetriaPayload } from "@/types/api";
 
 import { useTelemetryStore } from "../store/useTelemetryStore";
 
@@ -22,18 +22,18 @@ const WRAPPER_CLASS_NAME =
 
 type ReplaySpeed = (typeof SPEED_OPTIONS)[number];
 
-function getSliderMax(history: TelemetriaResponse[]): number {
+function getSliderMax(history: WSTelemetriaPayload[]): number {
   return Math.max(history.length - 1, 0);
 }
 
-function getFrameTimestamp(frame: TelemetriaResponse): number {
+function getFrameTimestamp(frame: WSTelemetriaPayload): number {
   return Date.parse(frame.criado_em);
 }
 
 function getFrameByIndex(
-  history: TelemetriaResponse[],
+  history: WSTelemetriaPayload[],
   index: number,
-): TelemetriaResponse | null {
+): WSTelemetriaPayload | null {
   if (history.length === 0) {
     return null;
   }
@@ -43,7 +43,7 @@ function getFrameByIndex(
   return history[clampedIndex];
 }
 
-function formatFrameTimestamp(frame: TelemetriaResponse | null): string {
+function formatFrameTimestamp(frame: WSTelemetriaPayload | null): string {
   if (frame === null) {
     return "--";
   }
@@ -56,10 +56,10 @@ function getCurrentTimestamp(): number {
 }
 
 function buildInterpolatedFrame(
-  currentFrame: TelemetriaResponse,
-  nextFrame: TelemetriaResponse,
+  currentFrame: WSTelemetriaPayload,
+  nextFrame: WSTelemetriaPayload,
   replayTimestamp: number,
-): TelemetriaResponse {
+): WSTelemetriaPayload {
   const currentTimestamp = getFrameTimestamp(currentFrame);
   const nextTimestamp = getFrameTimestamp(nextFrame);
   const duration = Math.max(nextTimestamp - currentTimestamp, 1);
